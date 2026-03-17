@@ -53,7 +53,75 @@ document.getElementById("nav-chart").onclick = () => switchView("chart");
 // === State ===
 let currentSnapshot = null;
 let currencyMode = "original";
-const editingCategories = new Set(); // tracks which categories are in edit mode
+const editingCategories = new Set();
+let disguised = true; // privacy: show game terms by default
+
+// === Disguise System ===
+const DISGUISE_CATEGORIES = {
+    deposits: "金幣儲藏",
+    insurance: "防禦裝備",
+    bonds: "鍛造材料",
+    structured_products: "附魔寶石",
+    tw_stocks: "本地市集",
+    us_stocks: "跨境市集"
+};
+
+const DISGUISE_ITEM_PREFIXES = {
+    deposits: "金幣袋",
+    insurance: "護盾",
+    bonds: "秘銀錠",
+    structured_products: "混沌石",
+    tw_stocks: "商品",
+    us_stocks: "異界品"
+};
+
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+
+function disguiseLabel(cat) {
+    return disguised ? DISGUISE_CATEGORIES[cat] : CATEGORY_LABELS[cat];
+}
+
+function disguiseName(name, cat, idx) {
+    if (!disguised) return name;
+    const prefix = DISGUISE_ITEM_PREFIXES[cat] || "物品";
+    return `${prefix} ${ROMAN[idx] || idx + 1}`;
+}
+
+function disguiseCurrency(currency) {
+    if (!disguised) return currency;
+    return currency === "TWD" ? "G" : "D";
+}
+
+function disguiseMoneyPrefix(currency) {
+    if (!disguised) return currency === "TWD" ? "NT$" : "US$";
+    return currency === "TWD" ? "" : "";
+}
+
+function formatMoney(value, currency) {
+    const prefix = disguised ? "" : (currency === "TWD" ? "NT$" : "US$");
+    const suffix = disguised ? (currency === "TWD" ? "G" : "D") : "";
+    const num = value.toLocaleString("en-US", {minimumFractionDigits: 0, maximumFractionDigits: 0});
+    return `${prefix}${num}${suffix}`;
+}
+
+// Secret key sequence listener
+let keyBuffer = "";
+document.addEventListener("keydown", (e) => {
+    // Only listen when not focused on an input/select
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+    keyBuffer += e.key.toLowerCase();
+    if (keyBuffer.length > 10) keyBuffer = keyBuffer.slice(-10);
+    if (keyBuffer.endsWith("werwer")) {
+        disguised = !disguised;
+        keyBuffer = "";
+        loadSnapshotList().then(() => {
+            if (currentSnapshot) {
+                document.getElementById("snapshot-select").value = currentSnapshot.date;
+                renderSnapshot(currentSnapshot);
+            }
+        });
+    }
+});
 
 async function init() {
     await loadSnapshotList();
@@ -71,7 +139,7 @@ async function loadSnapshotList() {
         list.forEach(item => {
             const opt = document.createElement("option");
             opt.value = item.date;
-            opt.textContent = `${item.date}${item.note ? " — " + item.note : ""}`;
+            opt.textContent = disguised ? `Season ${item.date}` : `${item.date}${item.note ? " — " + item.note : ""}`;
             s.appendChild(opt);
         });
     });
@@ -153,11 +221,6 @@ function convertValue(value, fromCurrency, toMode, rate) {
     }
 }
 
-function formatMoney(value, currency) {
-    const prefix = currency === "TWD" ? "NT$" : "US$";
-    return `${prefix}${value.toLocaleString("en-US", {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
-}
-
 // === Render Overview ===
 function renderSnapshot(snapshot) {
     const container = document.getElementById("snapshot-content");
@@ -171,12 +234,29 @@ function renderSnapshot(snapshot) {
     // Snapshot meta (note + exchange rate, editable inline)
     const metaDiv = document.createElement("div");
     metaDiv.className = "snapshot-meta";
-    metaDiv.innerHTML = `
-        <div class="form-group"><label>日期</label><span>${snapshot.date}</span></div>
-        <div class="form-group"><label>備註</label><input id="meta-note" type="text" value="${snapshot.note || ""}" style="width:200px"></div>
-        <div class="form-group"><label>USD/TWD</label><input id="meta-rate" type="number" step="0.1" value="${rate}" style="width:80px"></div>
-    `;
+    if (disguised) {
+        metaDiv.innerHTML = `
+            <div class="form-group"><label>Season</label><span>${snapshot.date}</span></div>
+            <div class="form-group"><label>G/D Rate</label><span>${rate}</span></div>
+        `;
+    } else {
+        metaDiv.innerHTML = `
+            <div class="form-group"><label>日期</label><span>${snapshot.date}</span></div>
+            <div class="form-group"><label>備註</label><input id="meta-note" type="text" value="${snapshot.note || ""}" style="width:200px"></div>
+            <div class="form-group"><label>USD/TWD</label><input id="meta-rate" type="number" step="0.1" value="${rate}" style="width:80px"></div>
+        `;
+    }
     container.appendChild(metaDiv);
+
+    // Update UI for disguise mode
+    document.getElementById("btn-new-snapshot").style.display = disguised ? "none" : "";
+    document.getElementById("btn-calculate").style.display = disguised ? "none" : "";
+    document.getElementById("btn-save-snapshot").style.display = disguised ? "none" : "";
+    document.querySelectorAll(".cur-btn").forEach(btn => {
+        if (btn.dataset.mode === "original") btn.textContent = disguised ? "Split" : "原幣";
+        if (btn.dataset.mode === "twd") btn.textContent = disguised ? "Gold" : "TWD";
+        if (btn.dataset.mode === "usd") btn.textContent = disguised ? "Diamond" : "USD";
+    });
 
     const categories = ["deposits", "insurance", "bonds", "structured_products", "tw_stocks", "us_stocks"];
 
@@ -193,21 +273,22 @@ function renderSnapshot(snapshot) {
         // Category header with edit toggle
         const header = document.createElement("div");
         header.className = "category-header";
-        const editBtn = document.createElement("button");
-        editBtn.className = `btn-edit-cat${isEditing ? " active" : ""}`;
-        editBtn.textContent = isEditing ? "完成編輯" : "編輯";
-        editBtn.onclick = () => {
-            if (isEditing) {
-                // Collect edited data back into snapshot before leaving edit mode
-                collectCategoryData(cat, snapshot);
-                editingCategories.delete(cat);
-            } else {
-                editingCategories.add(cat);
-            }
-            renderSnapshot(snapshot);
-        };
-        header.innerHTML = `<h3>${CATEGORY_LABELS[cat]}</h3>`;
-        header.appendChild(editBtn);
+        header.innerHTML = `<h3>${disguiseLabel(cat)}</h3>`;
+        if (!disguised) {
+            const editBtn = document.createElement("button");
+            editBtn.className = `btn-edit-cat${isEditing ? " active" : ""}`;
+            editBtn.textContent = isEditing ? "完成編輯" : "編輯";
+            editBtn.onclick = () => {
+                if (isEditing) {
+                    collectCategoryData(cat, snapshot);
+                    editingCategories.delete(cat);
+                } else {
+                    editingCategories.add(cat);
+                }
+                renderSnapshot(snapshot);
+            };
+            header.appendChild(editBtn);
+        }
         div.appendChild(header);
 
         if (isEditing) {
@@ -238,12 +319,13 @@ function renderSnapshot(snapshot) {
 
             const tbody = document.createElement("tbody");
             let catTWD = 0, catUSD = 0;
-            for (const item of items) {
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
                 const value = getAssetValue(cat, item);
                 const currency = item.currency;
                 if (currency === "TWD") { totalTWD += value; catTWD += value; }
                 else if (currency === "USD") { totalUSD += value; catUSD += value; }
-                tbody.appendChild(buildAssetRow(cat, item, value, rate));
+                tbody.appendChild(buildAssetRow(cat, item, value, rate, i));
             }
 
             // Subtotal
@@ -252,7 +334,8 @@ function renderSnapshot(snapshot) {
             subtotalRow.style.borderTop = "2px solid #ccc";
             const subtotalText = buildSubtotalText(catTWD, catUSD, rate);
             const colCount = table.querySelector("thead tr").children.length;
-            subtotalRow.innerHTML = `<td>小計</td><td colspan="${colCount - 1}" style="text-align:right">${subtotalText}</td>`;
+            const subtotalLabel = disguised ? "Subtotal" : "小計";
+        subtotalRow.innerHTML = `<td>${subtotalLabel}</td><td colspan="${colCount - 1}" style="text-align:right">${subtotalText}</td>`;
             tbody.appendChild(subtotalRow);
 
             table.appendChild(tbody);
@@ -345,18 +428,34 @@ function buildHeaderRow(cat) {
     const tr = document.createElement("tr");
     let headers = [];
 
-    switch (cat) {
-        case "deposits":
-            headers = ["名稱", "幣別", "金額"]; break;
-        case "insurance":
-            headers = ["名稱", "類型", "幣別", "保單價值", "年繳保費"]; break;
-        case "bonds":
-            headers = ["名稱", "幣別", "單位數", "票面利率", "即時價格", "市值"]; break;
-        case "structured_products":
-            headers = ["名稱", "幣別", "本金", "帳戶價值", "連結標的"]; break;
-        case "tw_stocks":
-        case "us_stocks":
-            headers = ["名稱", "股數", "均成本", "即時價格", "市值"]; break;
+    if (disguised) {
+        switch (cat) {
+            case "deposits":
+                headers = ["Item", "Type", "Amount"]; break;
+            case "insurance":
+                headers = ["Item", "Class", "Type", "Power", "Cost/Season"]; break;
+            case "bonds":
+                headers = ["Item", "Type", "Qty", "Buff%", "Market Price", "Value"]; break;
+            case "structured_products":
+                headers = ["Item", "Type", "Base", "Current", "Linked"]; break;
+            case "tw_stocks":
+            case "us_stocks":
+                headers = ["Item", "Qty", "Avg Cost", "Market Price", "Value"]; break;
+        }
+    } else {
+        switch (cat) {
+            case "deposits":
+                headers = ["名稱", "幣別", "金額"]; break;
+            case "insurance":
+                headers = ["名稱", "類型", "幣別", "保單價值", "年繳保費"]; break;
+            case "bonds":
+                headers = ["名稱", "幣別", "單位數", "票面利率", "即時價格", "市值"]; break;
+            case "structured_products":
+                headers = ["名稱", "幣別", "本金", "帳戶價值", "連結標的"]; break;
+            case "tw_stocks":
+            case "us_stocks":
+                headers = ["名稱", "股數", "均成本", "即時價格", "市值"]; break;
+        }
     }
 
     headers.forEach(h => {
@@ -368,36 +467,50 @@ function buildHeaderRow(cat) {
     return thead;
 }
 
-function buildAssetRow(cat, item, value, rate) {
+function buildAssetRow(cat, item, value, rate, idx) {
     const tr = document.createElement("tr");
     const converted = convertValue(value, item.currency, currencyMode, rate);
     const displayVal = formatMoney(converted.value, converted.currency);
+    const dName = disguiseName(item.name, cat, idx);
+    const dCur = disguiseCurrency(item.currency);
 
     switch (cat) {
         case "deposits":
-            tr.innerHTML = `<td>${item.name}</td><td>${item.currency}</td><td>${displayVal}</td>`;
+            tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${displayVal}</td>`;
             break;
-        case "insurance":
+        case "insurance": {
+            const insType = disguised ? (item.type === "savings" ? "Buff" : "Passive") : (item.type === "savings" ? "儲蓄" : "醫療");
             const insVal = item.type === "savings"
                 ? formatMoney(convertValue(item.surrender_value || 0, item.currency, currencyMode, rate).value, convertValue(0, item.currency, currencyMode, rate).currency)
                 : "—";
             const premConv = convertValue(item.annual_premium, item.currency, currencyMode, rate);
-            tr.innerHTML = `<td>${item.name}</td><td>${item.type === "savings" ? "儲蓄" : "醫療"}</td><td>${item.currency}</td><td>${insVal}</td><td>${formatMoney(premConv.value, premConv.currency)}</td>`;
+            tr.innerHTML = `<td>${dName}</td><td>${insType}</td><td>${dCur}</td><td>${insVal}</td><td>${formatMoney(premConv.value, premConv.currency)}</td>`;
             break;
+        }
         case "bonds":
-            tr.innerHTML = `<td>${item.name}</td><td>${item.currency}</td><td>${item.units}</td><td>${(item.coupon_rate * 100).toFixed(1)}%</td>
-                <td><input class="calc-input" type="number" data-cat="${cat}" data-name="${item.name}" data-field="current_price_per_unit" value="${item.current_price_per_unit ?? ""}"></td>
-                <td>${displayVal}</td>`;
+            if (disguised) {
+                tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${item.units}</td><td>${(item.coupon_rate * 100).toFixed(1)}%</td><td>—</td><td>${displayVal}</td>`;
+            } else {
+                tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${item.units}</td><td>${(item.coupon_rate * 100).toFixed(1)}%</td>
+                    <td><input class="calc-input" type="number" data-cat="${cat}" data-name="${item.name}" data-field="current_price_per_unit" value="${item.current_price_per_unit ?? ""}"></td>
+                    <td>${displayVal}</td>`;
+            }
             break;
-        case "structured_products":
+        case "structured_products": {
             const prinConv = convertValue(item.principal, item.currency, currencyMode, rate);
-            tr.innerHTML = `<td>${item.name}</td><td>${item.currency}</td><td>${formatMoney(prinConv.value, prinConv.currency)}</td><td>${displayVal}</td><td>${item.linked_to || ""}</td>`;
+            const dLinked = disguised ? "Enchant" : (item.linked_to || "");
+            tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${formatMoney(prinConv.value, prinConv.currency)}</td><td>${displayVal}</td><td>${dLinked}</td>`;
             break;
+        }
         case "tw_stocks":
         case "us_stocks":
-            tr.innerHTML = `<td>${item.name}</td><td>${item.shares}</td><td>${item.avg_cost}</td>
-                <td><input class="calc-input" type="number" data-cat="${cat}" data-name="${item.name}" data-field="current_price" value="${item.current_price ?? ""}"></td>
-                <td>${displayVal}</td>`;
+            if (disguised) {
+                tr.innerHTML = `<td>${dName}</td><td>${item.shares}</td><td>${item.avg_cost}</td><td>—</td><td>${displayVal}</td>`;
+            } else {
+                tr.innerHTML = `<td>${dName}</td><td>${item.shares}</td><td>${item.avg_cost}</td>
+                    <td><input class="calc-input" type="number" data-cat="${cat}" data-name="${item.name}" data-field="current_price" value="${item.current_price ?? ""}"></td>
+                    <td>${displayVal}</td>`;
+            }
             break;
     }
     return tr;
@@ -417,16 +530,20 @@ function buildSubtotalText(catTWD, catUSD, rate) {
 }
 
 function renderTotals(container, totalTWD, totalUSD, rate) {
+    const labelTWD = disguised ? "Gold Assets" : "台幣資產";
+    const labelUSD = disguised ? "Diamond Assets" : "美元資產";
+    const labelTotal = disguised ? "Total Power" : "總資產";
+
     if (currencyMode === "original") {
         container.innerHTML = `
-            <div class="total-row"><span>台幣資產</span><span>${formatMoney(totalTWD, "TWD")}</span></div>
-            <div class="total-row"><span>美元資產</span><span>${formatMoney(totalUSD, "USD")}</span></div>`;
+            <div class="total-row"><span>${labelTWD}</span><span>${formatMoney(totalTWD, "TWD")}</span></div>
+            <div class="total-row"><span>${labelUSD}</span><span>${formatMoney(totalUSD, "USD")}</span></div>`;
     } else if (currencyMode === "twd") {
         const total = totalTWD + totalUSD * rate;
-        container.innerHTML = `<div class="total-row grand"><span>總資產</span><span>${formatMoney(total, "TWD")}</span></div>`;
+        container.innerHTML = `<div class="total-row grand"><span>${labelTotal}</span><span>${formatMoney(total, "TWD")}</span></div>`;
     } else {
         const total = totalTWD / rate + totalUSD;
-        container.innerHTML = `<div class="total-row grand"><span>總資產</span><span>${formatMoney(total, "USD")}</span></div>`;
+        container.innerHTML = `<div class="total-row grand"><span>${labelTotal}</span><span>${formatMoney(total, "USD")}</span></div>`;
     }
 }
 
