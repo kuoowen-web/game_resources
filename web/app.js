@@ -54,7 +54,24 @@ document.getElementById("nav-chart").onclick = () => switchView("chart");
 let currentSnapshot = null;
 let currencyMode = "original";
 const editingCategories = new Set();
-let disguised = true; // privacy: show game terms by default
+let disguised = true;
+
+// === Currency Config ===
+const ALL_CURRENCIES = ["TWD", "USD", "JPY", "EUR"];
+const CURRENCY_PREFIXES = {TWD: "NT$", USD: "US$", JPY: "¥", EUR: "€"};
+const DISGUISE_CURRENCY_MAP = {TWD: "G", USD: "D", JPY: "S", EUR: "R"};
+const EXCHANGE_RATE_KEYS = ["USD_TWD", "JPY_TWD", "EUR_TWD"];
+
+function getRate(rates, fromCurrency) {
+    if (!fromCurrency || fromCurrency === "TWD") return 1;
+    const key = `${fromCurrency}_TWD`;
+    const rate = rates?.[key];
+    if (!rate) {
+        console.warn(`Missing exchange rate: ${key}`);
+        return null;
+    }
+    return rate;
+}
 
 // === Disguise System ===
 const DISGUISE_CATEGORIES = {
@@ -63,7 +80,8 @@ const DISGUISE_CATEGORIES = {
     bonds: "鍛造材料",
     structured_products: "附魔寶石",
     tw_stocks: "本地市集",
-    us_stocks: "跨境市集"
+    us_stocks: "跨境市集",
+    crypto: "虛空碎片"
 };
 
 const DISGUISE_ITEM_PREFIXES = {
@@ -72,7 +90,8 @@ const DISGUISE_ITEM_PREFIXES = {
     bonds: "秘銀錠",
     structured_products: "混沌石",
     tw_stocks: "商品",
-    us_stocks: "異界品"
+    us_stocks: "異界品",
+    crypto: "碎片"
 };
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
@@ -89,25 +108,22 @@ function disguiseName(name, cat, idx) {
 
 function disguiseCurrency(currency) {
     if (!disguised) return currency;
-    return currency === "TWD" ? "G" : "D";
-}
-
-function disguiseMoneyPrefix(currency) {
-    if (!disguised) return currency === "TWD" ? "NT$" : "US$";
-    return currency === "TWD" ? "" : "";
+    return DISGUISE_CURRENCY_MAP[currency] || "?";
 }
 
 function formatMoney(value, currency) {
-    const prefix = disguised ? "" : (currency === "TWD" ? "NT$" : "US$");
-    const suffix = disguised ? (currency === "TWD" ? "G" : "D") : "";
-    const num = value.toLocaleString("en-US", {minimumFractionDigits: 0, maximumFractionDigits: 0});
-    return `${prefix}${num}${suffix}`;
+    if (value == null || isNaN(value)) return "—";
+    if (disguised) {
+        const suffix = DISGUISE_CURRENCY_MAP[currency] || "?";
+        return `${value.toLocaleString("en-US", {maximumFractionDigits: 0})}${suffix}`;
+    }
+    const prefix = CURRENCY_PREFIXES[currency] || "";
+    return `${prefix}${value.toLocaleString("en-US", {maximumFractionDigits: 0})}`;
 }
 
 // Secret key sequence listener
 let keyBuffer = "";
 document.addEventListener("keydown", (e) => {
-    // Only listen when not focused on an input/select
     if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
     keyBuffer += e.key.toLowerCase();
     if (keyBuffer.length > 10) keyBuffer = keyBuffer.slice(-10);
@@ -152,19 +168,20 @@ const CATEGORY_LABELS = {
     bonds: "債券",
     structured_products: "結構型商品",
     tw_stocks: "台股",
-    us_stocks: "美股"
+    us_stocks: "美股",
+    crypto: "虛擬貨幣"
 };
 
 const ASSET_FIELDS = {
     deposits: [
         {key: "name", label: "名稱", type: "text"},
-        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "currency", label: "幣別", type: "select", options: ALL_CURRENCIES},
         {key: "amount", label: "金額", type: "number"}
     ],
     insurance: [
         {key: "name", label: "名稱", type: "text"},
         {key: "type", label: "類型", type: "select", options: ["savings", "health"]},
-        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "currency", label: "幣別", type: "select", options: ALL_CURRENCIES},
         {key: "surrender_value", label: "保單價值", type: "number"},
         {key: "annual_premium", label: "年繳保費", type: "number"},
         {key: "paid_years", label: "已繳年數", type: "number"},
@@ -172,7 +189,7 @@ const ASSET_FIELDS = {
     ],
     bonds: [
         {key: "name", label: "名稱", type: "text"},
-        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "currency", label: "幣別", type: "select", options: ALL_CURRENCIES},
         {key: "units", label: "單位數", type: "number"},
         {key: "face_value_per_unit", label: "面額/單位", type: "number"},
         {key: "coupon_rate", label: "票面利率", type: "number", step: "0.001"},
@@ -181,7 +198,7 @@ const ASSET_FIELDS = {
     ],
     structured_products: [
         {key: "name", label: "名稱", type: "text"},
-        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "currency", label: "幣別", type: "select", options: ALL_CURRENCIES},
         {key: "principal", label: "本金", type: "number"},
         {key: "account_value", label: "帳戶價值", type: "number"},
         {key: "linked_to", label: "連結標的", type: "text"},
@@ -196,29 +213,44 @@ const ASSET_FIELDS = {
         {key: "name", label: "名稱", type: "text"},
         {key: "shares", label: "股數", type: "number"},
         {key: "avg_cost", label: "均成本", type: "number"}
+    ],
+    crypto: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "currency", label: "計價幣別", type: "select", options: ["USD", "TWD"]},
+        {key: "amount", label: "數量", type: "number", step: "0.00000001"},
+        {key: "avg_cost", label: "均成本", type: "number", step: "0.01"},
+        {key: "current_price", label: "即時價格", type: "number", step: "0.01"}
     ]
 };
 
 function getAssetValue(category, item) {
+    if (!item) return 0;
     switch (category) {
-        case "deposits": return item.amount;
-        case "insurance": return item.type === "savings" ? (item.surrender_value || 0) : 0;
-        case "bonds": return item.market_value ?? (item.units * item.face_value_per_unit);
-        case "structured_products": return item.account_value;
+        case "deposits": return item.amount || 0;
+        case "insurance": return item.surrender_value || 0;
+        case "bonds": return item.market_value ?? ((item.units || 0) * (item.face_value_per_unit || 0));
+        case "structured_products": return item.account_value || 0;
         case "tw_stocks":
-        case "us_stocks": return item.market_value ?? (item.shares * item.avg_cost);
+        case "us_stocks": return item.market_value ?? ((item.shares || 0) * (item.avg_cost || 0));
+        case "crypto": return item.market_value ?? ((item.amount || 0) * (item.avg_cost || 0));
         default: return 0;
     }
 }
 
-function convertValue(value, fromCurrency, toMode, rate) {
+function convertValue(value, fromCurrency, toMode, rates) {
+    if (value == null || isNaN(value)) return {value: 0, currency: fromCurrency || "TWD"};
     if (toMode === "original") return {value, currency: fromCurrency};
+    const fromRate = getRate(rates, fromCurrency);
+    if (fromRate == null) return {value, currency: fromCurrency}; // missing rate: show original
     if (toMode === "twd") {
-        return {value: fromCurrency === "USD" ? value * rate : value, currency: "TWD"};
+        return {value: value * fromRate, currency: "TWD"};
     }
     if (toMode === "usd") {
-        return {value: fromCurrency === "TWD" ? value / rate : value, currency: "USD"};
+        const usdRate = getRate(rates, "USD");
+        if (usdRate == null) return {value, currency: fromCurrency};
+        return {value: (value * fromRate) / usdRate, currency: "USD"};
     }
+    return {value, currency: fromCurrency};
 }
 
 // === Render Overview ===
@@ -228,22 +260,26 @@ function renderSnapshot(snapshot) {
     container.innerHTML = "";
     totalsDiv.innerHTML = "";
 
-    const rate = snapshot.exchange_rates?.USD_TWD || 32;
-    let totalTWD = 0, totalUSD = 0;
+    const rates = snapshot.exchange_rates || {};
+    let totalsByOrigCurrency = {};
 
-    // Snapshot meta (note + exchange rate, editable inline)
+    // Snapshot meta
     const metaDiv = document.createElement("div");
     metaDiv.className = "snapshot-meta";
     if (disguised) {
         metaDiv.innerHTML = `
             <div class="form-group"><label>Season</label><span>${snapshot.date}</span></div>
-            <div class="form-group"><label>G/D Rate</label><span>${rate}</span></div>
         `;
     } else {
+        let rateFields = EXCHANGE_RATE_KEYS.map(k => {
+            const label = k.replace("_TWD", "/TWD");
+            const val = rates[k] || "";
+            return `<div class="form-group"><label>${label}</label><input class="meta-rate-input" data-key="${k}" type="number" step="0.01" value="${val}" style="width:80px"></div>`;
+        }).join("");
         metaDiv.innerHTML = `
             <div class="form-group"><label>日期</label><span>${snapshot.date}</span></div>
             <div class="form-group"><label>備註</label><input id="meta-note" type="text" value="${snapshot.note || ""}" style="width:200px"></div>
-            <div class="form-group"><label>USD/TWD</label><input id="meta-rate" type="number" step="0.1" value="${rate}" style="width:80px"></div>
+            ${rateFields}
         `;
     }
     container.appendChild(metaDiv);
@@ -258,13 +294,12 @@ function renderSnapshot(snapshot) {
         if (btn.dataset.mode === "usd") btn.textContent = disguised ? "Diamond" : "USD";
     });
 
-    const categories = ["deposits", "insurance", "bonds", "structured_products", "tw_stocks", "us_stocks"];
+    const categories = ["deposits", "insurance", "bonds", "structured_products", "tw_stocks", "us_stocks", "crypto"];
 
     for (const cat of categories) {
         const items = snapshot.assets?.[cat] || [];
         const isEditing = editingCategories.has(cat);
 
-        // Show category even if empty when editing
         if (items.length === 0 && !isEditing) continue;
 
         const div = document.createElement("div");
@@ -278,10 +313,17 @@ function renderSnapshot(snapshot) {
             const editBtn = document.createElement("button");
             editBtn.className = `btn-edit-cat${isEditing ? " active" : ""}`;
             editBtn.textContent = isEditing ? "完成編輯" : "編輯";
-            editBtn.onclick = () => {
+            editBtn.onclick = async () => {
                 if (isEditing) {
                     collectCategoryData(cat, snapshot);
                     editingCategories.delete(cat);
+                    // Auto-save on finish editing
+                    collectMetaFields(snapshot);
+                    try {
+                        await API.update(snapshot.date, snapshot);
+                    } catch (e) {
+                        alert("儲存失敗: " + e.message);
+                    }
                 } else {
                     editingCategories.add(cat);
                 }
@@ -292,7 +334,6 @@ function renderSnapshot(snapshot) {
         div.appendChild(header);
 
         if (isEditing) {
-            // Edit mode: show editable form rows
             const editContainer = document.createElement("div");
             editContainer.id = `edit-${cat}`;
             const fields = ASSET_FIELDS[cat];
@@ -301,7 +342,6 @@ function renderSnapshot(snapshot) {
                 editContainer.appendChild(buildEditRow(cat, fields, items[i], i));
             }
 
-            // Add item button
             const addBtn = document.createElement("button");
             addBtn.className = "btn-add-row";
             addBtn.textContent = `+ 新增${CATEGORY_LABELS[cat]}`;
@@ -312,30 +352,32 @@ function renderSnapshot(snapshot) {
             editContainer.appendChild(addBtn);
             div.appendChild(editContainer);
         } else {
-            // View mode: show table
             const table = document.createElement("table");
             table.className = "asset-table";
             table.appendChild(buildHeaderRow(cat));
 
             const tbody = document.createElement("tbody");
-            let catTWD = 0, catUSD = 0;
+            let catByCurrency = {};
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
+                // Ensure currency fallback for stock categories
+                if (cat === "tw_stocks" && !item.currency) item.currency = "TWD";
+                if (cat === "us_stocks" && !item.currency) item.currency = "USD";
                 const value = getAssetValue(cat, item);
-                const currency = item.currency;
-                if (currency === "TWD") { totalTWD += value; catTWD += value; }
-                else if (currency === "USD") { totalUSD += value; catUSD += value; }
-                tbody.appendChild(buildAssetRow(cat, item, value, rate, i));
+                const currency = item.currency || "TWD";
+                catByCurrency[currency] = (catByCurrency[currency] || 0) + value;
+                totalsByOrigCurrency[currency] = (totalsByOrigCurrency[currency] || 0) + value;
+                tbody.appendChild(buildAssetRow(cat, item, value, rates, i));
             }
 
             // Subtotal
             const subtotalRow = document.createElement("tr");
             subtotalRow.style.fontWeight = "bold";
             subtotalRow.style.borderTop = "2px solid #ccc";
-            const subtotalText = buildSubtotalText(catTWD, catUSD, rate);
+            const subtotalText = buildSubtotalText(catByCurrency, rates);
             const colCount = table.querySelector("thead tr").children.length;
             const subtotalLabel = disguised ? "Subtotal" : "小計";
-        subtotalRow.innerHTML = `<td>${subtotalLabel}</td><td colspan="${colCount - 1}" style="text-align:right">${subtotalText}</td>`;
+            subtotalRow.innerHTML = `<td>${subtotalLabel}</td><td colspan="${colCount - 1}" style="text-align:right">${subtotalText}</td>`;
             tbody.appendChild(subtotalRow);
 
             table.appendChild(tbody);
@@ -345,7 +387,20 @@ function renderSnapshot(snapshot) {
         container.appendChild(div);
     }
 
-    renderTotals(totalsDiv, totalTWD, totalUSD, rate);
+    renderTotals(totalsDiv, totalsByOrigCurrency, rates);
+}
+
+function collectMetaFields(snapshot) {
+    const noteEl = document.getElementById("meta-note");
+    if (noteEl) snapshot.note = noteEl.value;
+    const rateInputs = document.querySelectorAll(".meta-rate-input");
+    if (rateInputs.length > 0) {
+        if (!snapshot.exchange_rates) snapshot.exchange_rates = {};
+        rateInputs.forEach(input => {
+            const val = parseFloat(input.value);
+            if (!isNaN(val) && val > 0) snapshot.exchange_rates[input.dataset.key] = val;
+        });
+    }
 }
 
 function buildEditRow(cat, fields, item, idx) {
@@ -441,6 +496,8 @@ function buildHeaderRow(cat) {
             case "tw_stocks":
             case "us_stocks":
                 headers = ["Item", "Qty", "Avg Cost", "Market Price", "Value"]; break;
+            case "crypto":
+                headers = ["Item", "Type", "Qty", "Avg Cost", "Market Price", "Value"]; break;
         }
     } else {
         switch (cat) {
@@ -455,6 +512,8 @@ function buildHeaderRow(cat) {
             case "tw_stocks":
             case "us_stocks":
                 headers = ["名稱", "股數", "均成本", "即時價格", "市值"]; break;
+            case "crypto":
+                headers = ["名稱", "計價幣別", "數量", "均成本", "即時價格", "市值"]; break;
         }
     }
 
@@ -467,9 +526,9 @@ function buildHeaderRow(cat) {
     return thead;
 }
 
-function buildAssetRow(cat, item, value, rate, idx) {
+function buildAssetRow(cat, item, value, rates, idx) {
     const tr = document.createElement("tr");
-    const converted = convertValue(value, item.currency, currencyMode, rate);
+    const converted = convertValue(value, item.currency, currencyMode, rates);
     const displayVal = formatMoney(converted.value, converted.currency);
     const dName = disguiseName(item.name, cat, idx);
     const dCur = disguiseCurrency(item.currency);
@@ -480,24 +539,25 @@ function buildAssetRow(cat, item, value, rate, idx) {
             break;
         case "insurance": {
             const insType = disguised ? (item.type === "savings" ? "Buff" : "Passive") : (item.type === "savings" ? "儲蓄" : "醫療");
-            const insVal = item.type === "savings"
-                ? formatMoney(convertValue(item.surrender_value || 0, item.currency, currencyMode, rate).value, convertValue(0, item.currency, currencyMode, rate).currency)
-                : "—";
-            const premConv = convertValue(item.annual_premium, item.currency, currencyMode, rate);
+            const svConv = convertValue(item.surrender_value || 0, item.currency, currencyMode, rates);
+            const insVal = item.surrender_value ? formatMoney(svConv.value, svConv.currency) : "—";
+            const premConv = convertValue(item.annual_premium || 0, item.currency, currencyMode, rates);
             tr.innerHTML = `<td>${dName}</td><td>${insType}</td><td>${dCur}</td><td>${insVal}</td><td>${formatMoney(premConv.value, premConv.currency)}</td>`;
             break;
         }
         case "bonds":
             if (disguised) {
-                tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${item.units}</td><td>${(item.coupon_rate * 100).toFixed(1)}%</td><td>—</td><td>${displayVal}</td>`;
+                const coupon = item.coupon_rate != null ? (item.coupon_rate * 100).toFixed(1) + "%" : "—";
+                tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${item.units || ""}</td><td>${coupon}</td><td>—</td><td>${displayVal}</td>`;
             } else {
-                tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${item.units}</td><td>${(item.coupon_rate * 100).toFixed(1)}%</td>
+                const coupon = item.coupon_rate != null ? (item.coupon_rate * 100).toFixed(1) + "%" : "—";
+                tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${item.units || ""}</td><td>${coupon}</td>
                     <td><input class="calc-input" type="number" data-cat="${cat}" data-name="${item.name}" data-field="current_price_per_unit" value="${item.current_price_per_unit ?? ""}"></td>
                     <td>${displayVal}</td>`;
             }
             break;
         case "structured_products": {
-            const prinConv = convertValue(item.principal, item.currency, currencyMode, rate);
+            const prinConv = convertValue(item.principal || 0, item.currency, currencyMode, rates);
             const dLinked = disguised ? "Enchant" : (item.linked_to || "");
             tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${formatMoney(prinConv.value, prinConv.currency)}</td><td>${displayVal}</td><td>${dLinked}</td>`;
             break;
@@ -505,45 +565,78 @@ function buildAssetRow(cat, item, value, rate, idx) {
         case "tw_stocks":
         case "us_stocks":
             if (disguised) {
-                tr.innerHTML = `<td>${dName}</td><td>${item.shares}</td><td>${item.avg_cost}</td><td>—</td><td>${displayVal}</td>`;
+                tr.innerHTML = `<td>${dName}</td><td>${item.shares || ""}</td><td>${item.avg_cost ?? ""}</td><td>—</td><td>${displayVal}</td>`;
             } else {
-                tr.innerHTML = `<td>${dName}</td><td>${item.shares}</td><td>${item.avg_cost}</td>
+                tr.innerHTML = `<td>${dName}</td><td>${item.shares || ""}</td><td>${item.avg_cost ?? ""}</td>
                     <td><input class="calc-input" type="number" data-cat="${cat}" data-name="${item.name}" data-field="current_price" value="${item.current_price ?? ""}"></td>
                     <td>${displayVal}</td>`;
             }
             break;
+        case "crypto": {
+            const mvConv = convertValue(value, item.currency, currencyMode, rates);
+            const mvVal = formatMoney(mvConv.value, mvConv.currency);
+            if (disguised) {
+                tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${item.amount ?? ""}</td><td>${item.avg_cost ?? ""}</td><td>—</td><td>${mvVal}</td>`;
+            } else {
+                tr.innerHTML = `<td>${dName}</td><td>${dCur}</td><td>${item.amount ?? ""}</td><td>${item.avg_cost ?? ""}</td>
+                    <td><input class="calc-input" type="number" step="0.01" data-cat="${cat}" data-name="${item.name}" data-field="current_price" value="${item.current_price ?? ""}"></td>
+                    <td>${mvVal}</td>`;
+            }
+            break;
+        }
     }
     return tr;
 }
 
-function buildSubtotalText(catTWD, catUSD, rate) {
+function buildSubtotalText(byCurrency, rates) {
     if (currencyMode === "original") {
         const parts = [];
-        if (catTWD) parts.push(formatMoney(catTWD, "TWD"));
-        if (catUSD) parts.push(formatMoney(catUSD, "USD"));
+        for (const [cur, val] of Object.entries(byCurrency)) {
+            if (val) parts.push(formatMoney(val, cur));
+        }
         return parts.join(" + ") || "—";
     } else if (currencyMode === "twd") {
-        return formatMoney(catTWD + catUSD * rate, "TWD");
+        let total = 0;
+        for (const [cur, val] of Object.entries(byCurrency)) {
+            total += val * getRate(rates, cur);
+        }
+        return formatMoney(total, "TWD");
     } else {
-        return formatMoney(catTWD / rate + catUSD, "USD");
+        const usdRate = getRate(rates, "USD");
+        let total = 0;
+        for (const [cur, val] of Object.entries(byCurrency)) {
+            total += (val * getRate(rates, cur)) / usdRate;
+        }
+        return formatMoney(total, "USD");
     }
 }
 
-function renderTotals(container, totalTWD, totalUSD, rate) {
-    const labelTWD = disguised ? "Gold Assets" : "台幣資產";
-    const labelUSD = disguised ? "Diamond Assets" : "美元資產";
-    const labelTotal = disguised ? "Total Power" : "總資產";
-
+function renderTotals(container, totalsByOrigCurrency, rates) {
     if (currencyMode === "original") {
-        container.innerHTML = `
-            <div class="total-row"><span>${labelTWD}</span><span>${formatMoney(totalTWD, "TWD")}</span></div>
-            <div class="total-row"><span>${labelUSD}</span><span>${formatMoney(totalUSD, "USD")}</span></div>`;
+        let html = "";
+        for (const cur of ALL_CURRENCIES) {
+            const val = totalsByOrigCurrency[cur];
+            if (val) {
+                const label = disguised ? `${DISGUISE_CURRENCY_MAP[cur]} Assets` : `${cur} 資產`;
+                html += `<div class="total-row"><span>${label}</span><span>${formatMoney(val, cur)}</span></div>`;
+            }
+        }
+        container.innerHTML = html || "—";
     } else if (currencyMode === "twd") {
-        const total = totalTWD + totalUSD * rate;
-        container.innerHTML = `<div class="total-row grand"><span>${labelTotal}</span><span>${formatMoney(total, "TWD")}</span></div>`;
+        let total = 0;
+        for (const [cur, val] of Object.entries(totalsByOrigCurrency)) {
+            total += val * getRate(rates, cur);
+        }
+        const label = disguised ? "Total Power" : "總資產";
+        container.innerHTML = `<div class="total-row grand"><span>${label}</span><span>${formatMoney(total, "TWD")}</span></div>`;
     } else {
-        const total = totalTWD / rate + totalUSD;
-        container.innerHTML = `<div class="total-row grand"><span>${labelTotal}</span><span>${formatMoney(total, "USD")}</span></div>`;
+        const usdRate = getRate(rates, "USD");
+        let total = 0;
+        for (const [cur, val] of Object.entries(totalsByOrigCurrency)) {
+            total += (val * getRate(rates, cur)) / usdRate;
+        }
+        const label = disguised ? "Total Power" : "總資產";
+        container.innerHTML = `<div class="total-row grand"><span>${label}</span><span>${formatMoney(total, "USD")}</span></div>`;
     }
 }
 
@@ -577,15 +670,17 @@ function calculateMarketValues() {
         const val = parseFloat(input.value);
         if (isNaN(val)) return;
 
-        const items = currentSnapshot.assets[cat] || [];
+        const items = currentSnapshot.assets?.[cat] || [];
         const item = items.find(i => i.name === name);
         if (!item) return;
 
         item[field] = val;
         if (cat === "bonds") {
-            item.market_value = item.units * val;
+            item.market_value = (item.units || 0) * val;
+        } else if (cat === "crypto") {
+            item.market_value = (item.amount || 0) * val;
         } else {
-            item.market_value = item.shares * val;
+            item.market_value = (item.shares || 0) * val;
         }
     });
     renderSnapshot(currentSnapshot);
@@ -593,12 +688,7 @@ function calculateMarketValues() {
 
 async function saveSnapshot() {
     if (!currentSnapshot) return;
-    // Collect meta fields
-    const noteEl = document.getElementById("meta-note");
-    const rateEl = document.getElementById("meta-rate");
-    if (noteEl) currentSnapshot.note = noteEl.value;
-    if (rateEl) currentSnapshot.exchange_rates = {USD_TWD: parseFloat(rateEl.value)};
-    // Collect any categories still in edit mode
+    collectMetaFields(currentSnapshot);
     for (const cat of editingCategories) {
         collectCategoryData(cat, currentSnapshot);
     }
@@ -637,12 +727,16 @@ document.getElementById("new-modal-save").onclick = async () => {
     const rate = parseFloat(document.getElementById("new-rate").value);
     const copyExisting = document.getElementById("new-copy-existing").checked;
 
-    let assets = {deposits: [], insurance: [], bonds: [], structured_products: [], tw_stocks: [], us_stocks: []};
+    let assets = {deposits: [], insurance: [], bonds: [], structured_products: [], tw_stocks: [], us_stocks: [], crypto: []};
     if (copyExisting && currentSnapshot) {
         assets = JSON.parse(JSON.stringify(currentSnapshot.assets));
     }
 
-    const snapshot = {date, note, exchange_rates: {USD_TWD: rate}, assets};
+    let exchange_rates = {USD_TWD: rate};
+    if (copyExisting && currentSnapshot?.exchange_rates) {
+        exchange_rates = {...currentSnapshot.exchange_rates, USD_TWD: rate};
+    }
+    const snapshot = {date, note, exchange_rates, assets};
     await API.create(snapshot);
     closeNewModal();
     await loadSnapshotList();
@@ -656,7 +750,12 @@ document.getElementById("new-modal-save").onclick = async () => {
 // === Comparison ===
 function compareSnapshots(a, b) {
     const container = document.getElementById("compare-content");
-    container.innerHTML = `<h2>${a.date} vs ${b.date}</h2>`;
+    const hdrA = disguised ? `Season ${a.date}` : a.date;
+    const hdrB = disguised ? `Season ${b.date}` : b.date;
+    container.innerHTML = `<h2>${hdrA} vs ${hdrB}</h2>`;
+
+    const nameLabel = disguised ? "Item" : "名稱";
+    const deltaLabel = disguised ? "Delta" : "變化";
 
     const categories = Object.keys(CATEGORY_LABELS);
     for (const cat of categories) {
@@ -666,31 +765,31 @@ function compareSnapshots(a, b) {
 
         const div = document.createElement("div");
         div.className = "compare-category";
-        div.innerHTML = `<h3>${CATEGORY_LABELS[cat]}</h3>`;
+        div.innerHTML = `<h3>${disguiseLabel(cat)}</h3>`;
 
         const table = document.createElement("table");
         table.className = "asset-table";
-        table.innerHTML = `<thead><tr><th>名稱</th><th>${a.date}</th><th>${b.date}</th><th>變化</th><th>%</th></tr></thead>`;
+        table.innerHTML = `<thead><tr><th>${nameLabel}</th><th>${hdrA}</th><th>${hdrB}</th><th>${deltaLabel}</th><th>%</th></tr></thead>`;
 
         const tbody = document.createElement("tbody");
-        const namesA = new Set(itemsA.map(i => i.name));
-        const namesB = new Set(itemsB.map(i => i.name));
-        const allNames = [...new Set([...namesA, ...namesB])];
+        const allNames = [...new Set([...itemsA.map(i => i.name), ...itemsB.map(i => i.name)])];
 
-        for (const name of allNames) {
-            const itemA = itemsA.find(i => i.name === name);
-            const itemB = itemsB.find(i => i.name === name);
+        for (let i = 0; i < allNames.length; i++) {
+            const name = allNames[i];
+            const itemA = itemsA.find(it => it.name === name);
+            const itemB = itemsB.find(it => it.name === name);
             const valA = itemA ? getAssetValue(cat, itemA) : 0;
             const valB = itemB ? getAssetValue(cat, itemB) : 0;
-            const currency = (itemA || itemB).currency;
+            const currency = (itemA || itemB).currency || "TWD";
             const delta = valB - valA;
             const pct = valA !== 0 ? ((delta / valA) * 100).toFixed(1) + "%" : "—";
 
             const tr = document.createElement("tr");
             const deltaClass = !itemA ? "delta-new" : !itemB ? "delta-removed" : delta >= 0 ? "delta-positive" : "delta-negative";
             const sign = delta >= 0 ? "+" : "";
+            const dName = disguiseName(name, cat, i);
 
-            tr.innerHTML = `<td class="${!itemA ? "delta-new" : !itemB ? "delta-removed" : ""}">${name}</td>
+            tr.innerHTML = `<td class="${!itemA ? "delta-new" : !itemB ? "delta-removed" : ""}">${dName}</td>
                 <td>${itemA ? formatMoney(valA, currency) : "—"}</td>
                 <td>${itemB ? formatMoney(valB, currency) : "—"}</td>
                 <td class="${deltaClass}">${sign}${formatMoney(Math.abs(delta), currency)}</td>
@@ -725,6 +824,13 @@ document.querySelectorAll(".chart-cur-btn").forEach(btn => {
 });
 
 async function renderChart() {
+    // Update chart currency toggle labels for disguise
+    document.querySelectorAll(".chart-cur-btn").forEach(btn => {
+        if (btn.dataset.mode === "original") btn.textContent = disguised ? "Split" : "原幣";
+        if (btn.dataset.mode === "twd") btn.textContent = disguised ? "Gold" : "TWD";
+        if (btn.dataset.mode === "usd") btn.textContent = disguised ? "Diamond" : "USD";
+    });
+
     const list = await API.list();
     if (list.length === 0) return;
 
@@ -734,61 +840,74 @@ async function renderChart() {
     const datasets = [];
 
     if (chartCurrencyMode === "original") {
-        const twdData = snapshots.map(s => {
-            let total = 0;
+        // One line per currency that has data
+        const currenciesUsed = new Set();
+        snapshots.forEach(s => {
             for (const [cat, items] of Object.entries(s.assets || {})) {
-                for (const item of items) {
-                    if (item.currency === "TWD") total += getAssetValue(cat, item);
-                }
+                for (const item of items) if (item.currency) currenciesUsed.add(item.currency);
             }
-            return total;
         });
-        const usdData = snapshots.map(s => {
-            let total = 0;
-            for (const [cat, items] of Object.entries(s.assets || {})) {
-                for (const item of items) {
-                    if (item.currency === "USD") total += getAssetValue(cat, item);
+        const colors = {TWD: "#e74c3c", USD: "#2980b9", JPY: "#f39c12", EUR: "#27ae60"};
+        let axisIdx = 0;
+        for (const cur of currenciesUsed) {
+            const data = snapshots.map(s => {
+                let total = 0;
+                for (const [cat, items] of Object.entries(s.assets || {})) {
+                    for (const item of items) {
+                        if (item.currency === cur) total += getAssetValue(cat, item);
+                    }
                 }
-            }
-            return total;
-        });
-        datasets.push(
-            {label: "TWD 資產 (NT$)", data: twdData, borderColor: "#e74c3c", yAxisID: "y-twd"},
-            {label: "USD 資產 (US$)", data: usdData, borderColor: "#2980b9", yAxisID: "y-usd"}
-        );
+                return total;
+            });
+            const yId = `y-${cur.toLowerCase()}`;
+            const curLabel = disguised ? `${DISGUISE_CURRENCY_MAP[cur] || "?"} Assets` : `${cur} Assets`;
+            datasets.push({label: curLabel, data, borderColor: colors[cur] || "#999", yAxisID: yId});
+            axisIdx++;
+        }
     } else {
         const currency = chartCurrencyMode.toUpperCase();
         const data = snapshots.map(s => {
-            const rate = s.exchange_rates?.USD_TWD || 32;
+            const rates = s.exchange_rates || {};
             let total = 0;
             for (const [cat, items] of Object.entries(s.assets || {})) {
                 for (const item of items) {
                     const val = getAssetValue(cat, item);
-                    total += convertValue(val, item.currency, chartCurrencyMode, rate).value;
+                    total += convertValue(val, item.currency, chartCurrencyMode, rates).value;
                 }
             }
             return total;
         });
+        const totalLabel = disguised ? "Total Power" : `總資產 (${CURRENCY_PREFIXES[currency] || currency})`;
         datasets.push({
-            label: `總資產 (${currency === "TWD" ? "NT$" : "US$"})`,
+            label: totalLabel,
             data, borderColor: "#2c3e50", fill: false
         });
     }
 
     if (trendChart) trendChart.destroy();
 
+    let scales = {};
+    if (chartCurrencyMode === "original") {
+        // Build dual/multi axis
+        const axisIds = [...new Set(datasets.map(d => d.yAxisID))];
+        axisIds.forEach((id, i) => {
+            const cur = id.replace("y-", "").toUpperCase();
+            const axisLabel = disguised ? (DISGUISE_CURRENCY_MAP[cur] || cur) : cur;
+            scales[id] = {
+                type: "linear",
+                position: i === 0 ? "left" : "right",
+                title: {display: true, text: axisLabel},
+                grid: {drawOnChartArea: i === 0}
+            };
+        });
+    } else {
+        scales = {y: {beginAtZero: false}};
+    }
+
     const config = {
         type: "line",
         data: {labels, datasets},
-        options: {
-            responsive: true,
-            scales: chartCurrencyMode === "original" ? {
-                "y-twd": {type: "linear", position: "left", title: {display: true, text: "NT$"}},
-                "y-usd": {type: "linear", position: "right", title: {display: true, text: "US$"}, grid: {drawOnChartArea: false}}
-            } : {
-                y: {beginAtZero: false}
-            }
-        }
+        options: {responsive: true, scales}
     };
 
     trendChart = new Chart(document.getElementById("trend-chart"), config);

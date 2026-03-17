@@ -169,8 +169,7 @@ Each snapshot is a single JSON file: `data/snapshots/YYYY-MM-DD.json`
 
 Each asset's "value" for totals is determined by:
 - deposits → `amount`
-- insurance (savings) → `surrender_value`
-- insurance (health) → 0 (expense only, not counted as asset)
+- insurance → `surrender_value` if available (both savings and health types can have account value), else 0
 - bonds → `market_value` if available, else `units * face_value_per_unit` (par value fallback)
 - structured_products → `account_value`
 - tw_stocks → `market_value` if available, else `shares * avg_cost` (cost basis fallback)
