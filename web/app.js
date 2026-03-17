@@ -300,7 +300,7 @@ function renderSnapshot(snapshot) {
         const items = snapshot.assets?.[cat] || [];
         const isEditing = editingCategories.has(cat);
 
-        if (items.length === 0 && !isEditing) continue;
+        if (items.length === 0 && !isEditing && disguised) continue;
 
         const div = document.createElement("div");
         div.className = "asset-category";
