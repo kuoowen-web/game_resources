@@ -37,6 +37,19 @@ game_resources/
 - Create: `server/app.py`
 - Create: `server/test_app.py`
 - Create: `data/snapshots/.gitkeep`
+- Create: `.gitignore`
+
+- [ ] **Step 0: Create .gitignore**
+
+```
+venv/
+__pycache__/
+*.pyc
+data/snapshots/*.json
+!data/snapshots/.gitkeep
+```
+
+Note: Real financial data is gitignored. Sample data in Task 9 should be committed by removing the ignore temporarily or using `git add -f`.
 
 - [ ] **Step 1: Create requirements.txt**
 
@@ -469,6 +482,7 @@ const API = {
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(snapshot)
         });
+        if (!resp.ok) throw new Error((await resp.json()).error || "Create failed");
         return resp.json();
     },
     async update(date, snapshot) {
@@ -477,10 +491,12 @@ const API = {
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify(snapshot)
         });
+        if (!resp.ok) throw new Error((await resp.json()).error || "Update failed");
         return resp.json();
     },
     async remove(date) {
         const resp = await fetch(`/api/snapshots/${date}`, {method: "DELETE"});
+        if (!resp.ok) throw new Error((await resp.json()).error || "Delete failed");
         return resp.json();
     }
 };
@@ -977,7 +993,7 @@ function collectFormData() {
             for (const input of itemDiv.querySelectorAll("[data-key]")) {
                 const key = input.dataset.key;
                 const val = input.value;
-                item[key] = input.type === "number" ? (val ? parseFloat(val) : null) : val;
+                item[key] = input.type === "number" ? (val !== "" ? parseFloat(val) : null) : val;
             }
             // Set fixed currency for tw_stocks and us_stocks
             if (cat === "tw_stocks") item.currency = "TWD";
