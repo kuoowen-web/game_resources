@@ -8,6 +8,7 @@
 ## 隱私規則
 
 - `player_stats.md` 和 `insights.md` 包含個人財務資料，不可 commit
+- `discussion-points.md` 包含討論中的財務決策，不可 commit
 - 寫入 `insights.md` 時不得包含可識別個人的財務數字，只記錄通用的研究結論
 
 ## 專案工具
