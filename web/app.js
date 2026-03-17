@@ -277,4 +277,39 @@ document.querySelectorAll(".cur-btn").forEach(btn => {
     };
 });
 
+// === Calculator ===
+function calculateMarketValues() {
+    if (!currentSnapshot) return;
+    const inputs = document.querySelectorAll(".calc-input");
+    inputs.forEach(input => {
+        const cat = input.dataset.cat;
+        const name = input.dataset.name;
+        const field = input.dataset.field;
+        const val = parseFloat(input.value);
+        if (isNaN(val)) return;
+
+        const items = currentSnapshot.assets[cat] || [];
+        const item = items.find(i => i.name === name);
+        if (!item) return;
+
+        item[field] = val;
+        if (cat === "bonds") {
+            item.market_value = item.units * val;
+        } else {
+            item.market_value = item.shares * val;
+        }
+    });
+    renderSnapshot(currentSnapshot);
+}
+
+async function saveSnapshot() {
+    if (!currentSnapshot) return;
+    calculateMarketValues();
+    await API.update(currentSnapshot.date, currentSnapshot);
+    alert("已儲存");
+}
+
+document.getElementById("btn-calculate").onclick = calculateMarketValues;
+document.getElementById("btn-save-snapshot").onclick = saveSnapshot;
+
 init();
