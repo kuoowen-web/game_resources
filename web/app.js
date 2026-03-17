@@ -522,4 +522,89 @@ document.getElementById("btn-compare").onclick = async () => {
     compareSnapshots(a, b);
 };
 
+// === Time Series Chart ===
+let trendChart = null;
+let chartCurrencyMode = "twd";
+
+document.querySelectorAll(".chart-cur-btn").forEach(btn => {
+    btn.onclick = function() {
+        document.querySelectorAll(".chart-cur-btn").forEach(b => b.classList.remove("active"));
+        this.classList.add("active");
+        chartCurrencyMode = this.dataset.mode;
+        renderChart();
+    };
+});
+
+async function renderChart() {
+    const list = await API.list();
+    if (list.length === 0) return;
+
+    const snapshots = await Promise.all(list.map(item => API.get(item.date)));
+    const labels = snapshots.map(s => s.date);
+
+    const datasets = [];
+
+    if (chartCurrencyMode === "original") {
+        const twdData = snapshots.map(s => {
+            let total = 0;
+            for (const [cat, items] of Object.entries(s.assets || {})) {
+                for (const item of items) {
+                    if (item.currency === "TWD") total += getAssetValue(cat, item);
+                }
+            }
+            return total;
+        });
+        const usdData = snapshots.map(s => {
+            let total = 0;
+            for (const [cat, items] of Object.entries(s.assets || {})) {
+                for (const item of items) {
+                    if (item.currency === "USD") total += getAssetValue(cat, item);
+                }
+            }
+            return total;
+        });
+        datasets.push(
+            {label: "TWD 資產 (NT$)", data: twdData, borderColor: "#e74c3c", yAxisID: "y-twd"},
+            {label: "USD 資產 (US$)", data: usdData, borderColor: "#2980b9", yAxisID: "y-usd"}
+        );
+    } else {
+        const currency = chartCurrencyMode.toUpperCase();
+        const data = snapshots.map(s => {
+            const rate = s.exchange_rates?.USD_TWD || 32;
+            let total = 0;
+            for (const [cat, items] of Object.entries(s.assets || {})) {
+                for (const item of items) {
+                    const val = getAssetValue(cat, item);
+                    total += convertValue(val, item.currency, chartCurrencyMode, rate).value;
+                }
+            }
+            return total;
+        });
+        datasets.push({
+            label: `總資產 (${currency === "TWD" ? "NT$" : "US$"})`,
+            data, borderColor: "#2c3e50", fill: false
+        });
+    }
+
+    if (trendChart) trendChart.destroy();
+
+    const config = {
+        type: "line",
+        data: {labels, datasets},
+        options: {
+            responsive: true,
+            scales: chartCurrencyMode === "original" ? {
+                "y-twd": {type: "linear", position: "left", title: {display: true, text: "NT$"}},
+                "y-usd": {type: "linear", position: "right", title: {display: true, text: "US$"}, grid: {drawOnChartArea: false}}
+            } : {
+                y: {beginAtZero: false}
+            }
+        }
+    };
+
+    trendChart = new Chart(document.getElementById("trend-chart"), config);
+}
+
+document.getElementById("nav-chart").addEventListener("click", renderChart);
+
 init();
