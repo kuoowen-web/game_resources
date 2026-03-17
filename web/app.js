@@ -464,4 +464,62 @@ document.getElementById("modal-save").onclick = async () => {
     renderSnapshot(currentSnapshot);
 };
 
+// === Comparison ===
+function compareSnapshots(a, b) {
+    const container = document.getElementById("compare-content");
+    container.innerHTML = `<h2>${a.date} vs ${b.date}</h2>`;
+
+    const categories = Object.keys(CATEGORY_LABELS);
+    for (const cat of categories) {
+        const itemsA = a.assets?.[cat] || [];
+        const itemsB = b.assets?.[cat] || [];
+        if (itemsA.length === 0 && itemsB.length === 0) continue;
+
+        const div = document.createElement("div");
+        div.className = "compare-category";
+        div.innerHTML = `<h3>${CATEGORY_LABELS[cat]}</h3>`;
+
+        const table = document.createElement("table");
+        table.className = "asset-table";
+        table.innerHTML = `<thead><tr><th>名稱</th><th>${a.date}</th><th>${b.date}</th><th>變化</th><th>%</th></tr></thead>`;
+
+        const tbody = document.createElement("tbody");
+        const namesA = new Set(itemsA.map(i => i.name));
+        const namesB = new Set(itemsB.map(i => i.name));
+        const allNames = [...new Set([...namesA, ...namesB])];
+
+        for (const name of allNames) {
+            const itemA = itemsA.find(i => i.name === name);
+            const itemB = itemsB.find(i => i.name === name);
+            const valA = itemA ? getAssetValue(cat, itemA) : 0;
+            const valB = itemB ? getAssetValue(cat, itemB) : 0;
+            const currency = (itemA || itemB).currency;
+            const delta = valB - valA;
+            const pct = valA !== 0 ? ((delta / valA) * 100).toFixed(1) + "%" : "—";
+
+            const tr = document.createElement("tr");
+            const deltaClass = !itemA ? "delta-new" : !itemB ? "delta-removed" : delta >= 0 ? "delta-positive" : "delta-negative";
+            const sign = delta >= 0 ? "+" : "";
+
+            tr.innerHTML = `<td class="${!itemA ? "delta-new" : !itemB ? "delta-removed" : ""}">${name}</td>
+                <td>${itemA ? formatMoney(valA, currency) : "—"}</td>
+                <td>${itemB ? formatMoney(valB, currency) : "—"}</td>
+                <td class="${deltaClass}">${sign}${formatMoney(Math.abs(delta), currency)}</td>
+                <td class="${deltaClass}">${pct}</td>`;
+            tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        div.appendChild(table);
+        container.appendChild(div);
+    }
+}
+
+document.getElementById("btn-compare").onclick = async () => {
+    const dateA = document.getElementById("compare-a").value;
+    const dateB = document.getElementById("compare-b").value;
+    if (!dateA || !dateB) { alert("請選擇兩個 Snapshot"); return; }
+    const [a, b] = await Promise.all([API.get(dateA), API.get(dateB)]);
+    compareSnapshots(a, b);
+};
+
 init();
