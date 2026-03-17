@@ -4,3 +4,9 @@ insights.md
 
 # Claude Code local settings
 .claude/
+
+venv/
+__pycache__/
+*.pyc
+data/snapshots/*.json
+!data/snapshots/.gitkeep
