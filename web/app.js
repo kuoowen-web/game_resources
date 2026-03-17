@@ -50,9 +50,10 @@ document.getElementById("nav-overview").onclick = () => switchView("overview");
 document.getElementById("nav-compare").onclick = () => switchView("compare");
 document.getElementById("nav-chart").onclick = () => switchView("chart");
 
-// === Init ===
+// === State ===
 let currentSnapshot = null;
 let currencyMode = "original";
+const editingCategories = new Set(); // tracks which categories are in edit mode
 
 async function init() {
     await loadSnapshotList();
@@ -84,6 +85,50 @@ const CATEGORY_LABELS = {
     structured_products: "結構型商品",
     tw_stocks: "台股",
     us_stocks: "美股"
+};
+
+const ASSET_FIELDS = {
+    deposits: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "amount", label: "金額", type: "number"}
+    ],
+    insurance: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "type", label: "類型", type: "select", options: ["savings", "health"]},
+        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "surrender_value", label: "保單價值", type: "number"},
+        {key: "annual_premium", label: "年繳保費", type: "number"},
+        {key: "paid_years", label: "已繳年數", type: "number"},
+        {key: "total_years", label: "總繳年數", type: "number"}
+    ],
+    bonds: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "units", label: "單位數", type: "number"},
+        {key: "face_value_per_unit", label: "面額/單位", type: "number"},
+        {key: "coupon_rate", label: "票面利率", type: "number", step: "0.001"},
+        {key: "purchase_year", label: "購買年份", type: "number"},
+        {key: "maturity_year", label: "到期年份", type: "number"}
+    ],
+    structured_products: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "principal", label: "本金", type: "number"},
+        {key: "account_value", label: "帳戶價值", type: "number"},
+        {key: "linked_to", label: "連結標的", type: "text"},
+        {key: "maturity_date", label: "到期日 (YYYY-MM)", type: "text"}
+    ],
+    tw_stocks: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "shares", label: "股數", type: "number"},
+        {key: "avg_cost", label: "均成本", type: "number"}
+    ],
+    us_stocks: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "shares", label: "股數", type: "number"},
+        {key: "avg_cost", label: "均成本", type: "number"}
+    ]
 };
 
 function getAssetValue(category, item) {
@@ -123,49 +168,176 @@ function renderSnapshot(snapshot) {
     const rate = snapshot.exchange_rates?.USD_TWD || 32;
     let totalTWD = 0, totalUSD = 0;
 
+    // Snapshot meta (note + exchange rate, editable inline)
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "snapshot-meta";
+    metaDiv.innerHTML = `
+        <div class="form-group"><label>日期</label><span>${snapshot.date}</span></div>
+        <div class="form-group"><label>備註</label><input id="meta-note" type="text" value="${snapshot.note || ""}" style="width:200px"></div>
+        <div class="form-group"><label>USD/TWD</label><input id="meta-rate" type="number" step="0.1" value="${rate}" style="width:80px"></div>
+    `;
+    container.appendChild(metaDiv);
+
     const categories = ["deposits", "insurance", "bonds", "structured_products", "tw_stocks", "us_stocks"];
 
     for (const cat of categories) {
         const items = snapshot.assets?.[cat] || [];
-        if (items.length === 0) continue;
+        const isEditing = editingCategories.has(cat);
+
+        // Show category even if empty when editing
+        if (items.length === 0 && !isEditing) continue;
 
         const div = document.createElement("div");
         div.className = "asset-category";
-        div.innerHTML = `<h3>${CATEGORY_LABELS[cat]}</h3>`;
 
-        const table = document.createElement("table");
-        table.className = "asset-table";
+        // Category header with edit toggle
+        const header = document.createElement("div");
+        header.className = "category-header";
+        const editBtn = document.createElement("button");
+        editBtn.className = `btn-edit-cat${isEditing ? " active" : ""}`;
+        editBtn.textContent = isEditing ? "完成編輯" : "編輯";
+        editBtn.onclick = () => {
+            if (isEditing) {
+                // Collect edited data back into snapshot before leaving edit mode
+                collectCategoryData(cat, snapshot);
+                editingCategories.delete(cat);
+            } else {
+                editingCategories.add(cat);
+            }
+            renderSnapshot(snapshot);
+        };
+        header.innerHTML = `<h3>${CATEGORY_LABELS[cat]}</h3>`;
+        header.appendChild(editBtn);
+        div.appendChild(header);
 
-        const headerRow = buildHeaderRow(cat);
-        table.appendChild(headerRow);
+        if (isEditing) {
+            // Edit mode: show editable form rows
+            const editContainer = document.createElement("div");
+            editContainer.id = `edit-${cat}`;
+            const fields = ASSET_FIELDS[cat];
 
-        const tbody = document.createElement("tbody");
-        let catTWD = 0, catUSD = 0;
-        for (const item of items) {
-            const value = getAssetValue(cat, item);
-            const currency = item.currency;
+            for (let i = 0; i < items.length; i++) {
+                editContainer.appendChild(buildEditRow(cat, fields, items[i], i));
+            }
 
-            if (currency === "TWD") { totalTWD += value; catTWD += value; }
-            else if (currency === "USD") { totalUSD += value; catUSD += value; }
+            // Add item button
+            const addBtn = document.createElement("button");
+            addBtn.className = "btn-add-row";
+            addBtn.textContent = `+ 新增${CATEGORY_LABELS[cat]}`;
+            addBtn.onclick = () => {
+                const idx = editContainer.querySelectorAll(".edit-row").length;
+                editContainer.insertBefore(buildEditRow(cat, fields, {}, idx), addBtn);
+            };
+            editContainer.appendChild(addBtn);
+            div.appendChild(editContainer);
+        } else {
+            // View mode: show table
+            const table = document.createElement("table");
+            table.className = "asset-table";
+            table.appendChild(buildHeaderRow(cat));
 
-            const row = buildAssetRow(cat, item, value, rate);
-            tbody.appendChild(row);
+            const tbody = document.createElement("tbody");
+            let catTWD = 0, catUSD = 0;
+            for (const item of items) {
+                const value = getAssetValue(cat, item);
+                const currency = item.currency;
+                if (currency === "TWD") { totalTWD += value; catTWD += value; }
+                else if (currency === "USD") { totalUSD += value; catUSD += value; }
+                tbody.appendChild(buildAssetRow(cat, item, value, rate));
+            }
+
+            // Subtotal
+            const subtotalRow = document.createElement("tr");
+            subtotalRow.style.fontWeight = "bold";
+            subtotalRow.style.borderTop = "2px solid #ccc";
+            const subtotalText = buildSubtotalText(catTWD, catUSD, rate);
+            const colCount = table.querySelector("thead tr").children.length;
+            subtotalRow.innerHTML = `<td>小計</td><td colspan="${colCount - 1}" style="text-align:right">${subtotalText}</td>`;
+            tbody.appendChild(subtotalRow);
+
+            table.appendChild(tbody);
+            div.appendChild(table);
         }
-        // Category subtotal row
-        const subtotalRow = document.createElement("tr");
-        subtotalRow.style.fontWeight = "bold";
-        subtotalRow.style.borderTop = "2px solid #ccc";
-        const subtotalText = buildSubtotalText(catTWD, catUSD, rate);
-        const colCount = table.querySelector("thead tr").children.length;
-        subtotalRow.innerHTML = `<td>小計</td><td colspan="${colCount - 1}" style="text-align:right">${subtotalText}</td>`;
-        tbody.appendChild(subtotalRow);
 
-        table.appendChild(tbody);
-        div.appendChild(table);
         container.appendChild(div);
     }
 
     renderTotals(totalsDiv, totalTWD, totalUSD, rate);
+}
+
+function buildEditRow(cat, fields, item, idx) {
+    const row = document.createElement("div");
+    row.className = "edit-row";
+    row.dataset.idx = idx;
+    row.style.padding = "0.5rem";
+    row.style.marginBottom = "0.3rem";
+    row.style.borderRadius = "4px";
+    row.style.display = "flex";
+    row.style.gap = "0.5rem";
+    row.style.alignItems = "end";
+    row.style.flexWrap = "wrap";
+
+    for (const f of fields) {
+        const val = item?.[f.key] ?? "";
+        const wrapper = document.createElement("div");
+        wrapper.style.display = "inline-flex";
+        wrapper.style.flexDirection = "column";
+        wrapper.style.minWidth = "80px";
+
+        const label = document.createElement("label");
+        label.textContent = f.label;
+        label.style.fontSize = "0.75rem";
+        label.style.color = "#666";
+        wrapper.appendChild(label);
+
+        if (f.type === "select") {
+            const sel = document.createElement("select");
+            sel.dataset.key = f.key;
+            f.options.forEach(o => {
+                const opt = document.createElement("option");
+                opt.value = o;
+                opt.textContent = o;
+                if (val === o) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            wrapper.appendChild(sel);
+        } else {
+            const input = document.createElement("input");
+            input.type = f.type;
+            input.dataset.key = f.key;
+            input.value = val;
+            if (f.step) input.step = f.step;
+            wrapper.appendChild(input);
+        }
+        row.appendChild(wrapper);
+    }
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn-remove-row";
+    removeBtn.textContent = "✕";
+    removeBtn.onclick = () => row.remove();
+    row.appendChild(removeBtn);
+
+    return row;
+}
+
+function collectCategoryData(cat, snapshot) {
+    const container = document.getElementById(`edit-${cat}`);
+    if (!container) return;
+    const items = [];
+    for (const row of container.querySelectorAll(".edit-row")) {
+        const item = {};
+        for (const input of row.querySelectorAll("[data-key]")) {
+            const key = input.dataset.key;
+            const val = input.value;
+            item[key] = input.type === "number" ? (val !== "" ? parseFloat(val) : null) : val;
+        }
+        if (cat === "tw_stocks") item.currency = "TWD";
+        if (cat === "us_stocks") item.currency = "USD";
+        items.push(item);
+    }
+    if (!snapshot.assets) snapshot.assets = {};
+    snapshot.assets[cat] = items;
 }
 
 function buildHeaderRow(cat) {
@@ -263,8 +435,8 @@ document.getElementById("snapshot-select").onchange = async function() {
     const date = this.value;
     if (!date) { currentSnapshot = null; return; }
     currentSnapshot = await API.get(date);
-    document.getElementById("btn-edit-snapshot").disabled = false;
     document.getElementById("btn-save-snapshot").disabled = false;
+    editingCategories.clear();
     renderSnapshot(currentSnapshot);
 };
 
@@ -304,163 +476,63 @@ function calculateMarketValues() {
 
 async function saveSnapshot() {
     if (!currentSnapshot) return;
+    // Collect meta fields
+    const noteEl = document.getElementById("meta-note");
+    const rateEl = document.getElementById("meta-rate");
+    if (noteEl) currentSnapshot.note = noteEl.value;
+    if (rateEl) currentSnapshot.exchange_rates = {USD_TWD: parseFloat(rateEl.value)};
+    // Collect any categories still in edit mode
+    for (const cat of editingCategories) {
+        collectCategoryData(cat, currentSnapshot);
+    }
     calculateMarketValues();
     await API.update(currentSnapshot.date, currentSnapshot);
+    editingCategories.clear();
+    await loadSnapshotList();
+    renderSnapshot(currentSnapshot);
     alert("已儲存");
 }
 
 document.getElementById("btn-calculate").onclick = calculateMarketValues;
 document.getElementById("btn-save-snapshot").onclick = saveSnapshot;
 
-// === Edit Modal ===
-const ASSET_FIELDS = {
-    deposits: [
-        {key: "name", label: "名稱", type: "text"},
-        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
-        {key: "amount", label: "金額", type: "number"}
-    ],
-    insurance: [
-        {key: "name", label: "名稱", type: "text"},
-        {key: "type", label: "類型", type: "select", options: ["savings", "health"]},
-        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
-        {key: "surrender_value", label: "保單價值", type: "number"},
-        {key: "annual_premium", label: "年繳保費", type: "number"},
-        {key: "paid_years", label: "已繳年數", type: "number"},
-        {key: "total_years", label: "總繳年數", type: "number"}
-    ],
-    bonds: [
-        {key: "name", label: "名稱", type: "text"},
-        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
-        {key: "units", label: "單位數", type: "number"},
-        {key: "face_value_per_unit", label: "面額/單位", type: "number"},
-        {key: "coupon_rate", label: "票面利率", type: "number", step: "0.001"},
-        {key: "purchase_year", label: "購買年份", type: "number"},
-        {key: "maturity_year", label: "到期年份", type: "number"}
-    ],
-    structured_products: [
-        {key: "name", label: "名稱", type: "text"},
-        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
-        {key: "principal", label: "本金", type: "number"},
-        {key: "account_value", label: "帳戶價值", type: "number"},
-        {key: "linked_to", label: "連結標的", type: "text"},
-        {key: "maturity_date", label: "到期日 (YYYY-MM)", type: "text"}
-    ],
-    tw_stocks: [
-        {key: "name", label: "名稱", type: "text"},
-        {key: "shares", label: "股數", type: "number"},
-        {key: "avg_cost", label: "均成本", type: "number"}
-    ],
-    us_stocks: [
-        {key: "name", label: "名稱", type: "text"},
-        {key: "shares", label: "股數", type: "number"},
-        {key: "avg_cost", label: "均成本", type: "number"}
-    ]
-};
-
-function openEditModal(snapshot, isNew = false) {
-    const modal = document.getElementById("edit-modal");
-    const body = document.getElementById("modal-body");
-    const title = document.getElementById("modal-title");
-    title.textContent = isNew ? "新增 Snapshot" : `編輯 ${snapshot.date}`;
-    modal.style.display = "flex";
-    body.innerHTML = buildEditForm(snapshot);
-}
-
-function buildEditForm(snapshot) {
-    const s = snapshot || {date: new Date().toISOString().slice(0, 10), note: "", exchange_rates: {USD_TWD: 32}, assets: {}};
-    let html = `
-        <div class="form-group"><label>日期</label><input id="edit-date" type="date" value="${s.date}"></div>
-        <div class="form-group"><label>備註</label><input id="edit-note" type="text" value="${s.note || ""}"></div>
-        <div class="form-group"><label>USD/TWD 匯率</label><input id="edit-rate" type="number" step="0.1" value="${s.exchange_rates?.USD_TWD || 32}"></div>
-    `;
-
-    for (const [cat, fields] of Object.entries(ASSET_FIELDS)) {
-        const items = s.assets?.[cat] || [];
-        html += `<div class="form-section" data-cat="${cat}">
-            <div class="form-section-header"><h3>${CATEGORY_LABELS[cat]}</h3><button type="button" class="btn-add-item" onclick="addItemRow('${cat}')">+ 新增</button></div>
-            <div class="item-list" id="items-${cat}">`;
-        items.forEach((item, idx) => {
-            html += buildItemRow(cat, fields, item, idx);
-        });
-        html += `</div></div>`;
-    }
-    return html;
-}
-
-function buildItemRow(cat, fields, item, idx) {
-    let html = `<div class="form-item" data-idx="${idx}">
-        <button type="button" class="btn-remove-item" onclick="this.parentElement.remove()">✕</button>`;
-    for (const f of fields) {
-        const val = item?.[f.key] ?? "";
-        if (f.type === "select") {
-            const opts = f.options.map(o => `<option value="${o}"${val === o ? " selected" : ""}>${o}</option>`).join("");
-            html += `<div class="form-group" style="display:inline-block;width:auto;margin-right:0.5rem"><label>${f.label}</label><select data-key="${f.key}">${opts}</select></div>`;
-        } else {
-            html += `<div class="form-group" style="display:inline-block;width:auto;margin-right:0.5rem"><label>${f.label}</label><input type="${f.type}" data-key="${f.key}" value="${val}"${f.step ? ` step="${f.step}"` : ""}></div>`;
-        }
-    }
-    html += `</div>`;
-    return html;
-}
-
-function addItemRow(cat) {
-    const container = document.getElementById(`items-${cat}`);
-    const fields = ASSET_FIELDS[cat];
-    const idx = container.children.length;
-    container.insertAdjacentHTML("beforeend", buildItemRow(cat, fields, {}, idx));
-}
-
-function collectFormData() {
-    const snapshot = {
-        date: document.getElementById("edit-date").value,
-        note: document.getElementById("edit-note").value,
-        exchange_rates: {USD_TWD: parseFloat(document.getElementById("edit-rate").value)},
-        assets: {}
-    };
-    for (const cat of Object.keys(ASSET_FIELDS)) {
-        const items = [];
-        const container = document.getElementById(`items-${cat}`);
-        if (!container) continue;
-        for (const itemDiv of container.querySelectorAll(".form-item")) {
-            const item = {};
-            for (const input of itemDiv.querySelectorAll("[data-key]")) {
-                const key = input.dataset.key;
-                const val = input.value;
-                item[key] = input.type === "number" ? (val !== "" ? parseFloat(val) : null) : val;
-            }
-            if (cat === "tw_stocks") item.currency = "TWD";
-            if (cat === "us_stocks") item.currency = "USD";
-            items.push(item);
-        }
-        snapshot.assets[cat] = items;
-    }
-    return snapshot;
+// === New Snapshot Modal ===
+function closeNewModal() {
+    document.getElementById("new-modal").style.display = "none";
 }
 
 document.getElementById("btn-new-snapshot").onclick = () => {
-    if (currentSnapshot) {
-        const copy = JSON.parse(JSON.stringify(currentSnapshot));
-        copy.date = new Date().toISOString().slice(0, 10);
-        copy.note = "";
-        openEditModal(copy, true);
-    } else {
-        openEditModal(null, true);
-    }
+    const modal = document.getElementById("new-modal");
+    document.getElementById("new-date").value = new Date().toISOString().slice(0, 10);
+    document.getElementById("new-note").value = "";
+    document.getElementById("new-rate").value = currentSnapshot?.exchange_rates?.USD_TWD || 32;
+    document.getElementById("new-copy-existing").checked = !!currentSnapshot;
+    modal.style.display = "flex";
 };
-document.getElementById("btn-edit-snapshot").onclick = () => openEditModal(currentSnapshot, false);
-document.getElementById("modal-close").onclick = () => document.getElementById("edit-modal").style.display = "none";
-document.getElementById("modal-cancel").onclick = () => document.getElementById("edit-modal").style.display = "none";
 
-document.getElementById("modal-save").onclick = async () => {
-    const data = collectFormData();
-    if (!data.date) { alert("請輸入日期"); return; }
-    await API.create(data);
-    document.getElementById("edit-modal").style.display = "none";
+document.getElementById("new-modal-close").onclick = closeNewModal;
+document.getElementById("new-modal-cancel").onclick = closeNewModal;
+
+document.getElementById("new-modal-save").onclick = async () => {
+    const date = document.getElementById("new-date").value;
+    if (!date) { alert("請輸入日期"); return; }
+    const note = document.getElementById("new-note").value;
+    const rate = parseFloat(document.getElementById("new-rate").value);
+    const copyExisting = document.getElementById("new-copy-existing").checked;
+
+    let assets = {deposits: [], insurance: [], bonds: [], structured_products: [], tw_stocks: [], us_stocks: []};
+    if (copyExisting && currentSnapshot) {
+        assets = JSON.parse(JSON.stringify(currentSnapshot.assets));
+    }
+
+    const snapshot = {date, note, exchange_rates: {USD_TWD: rate}, assets};
+    await API.create(snapshot);
+    closeNewModal();
     await loadSnapshotList();
-    document.getElementById("snapshot-select").value = data.date;
-    currentSnapshot = await API.get(data.date);
-    document.getElementById("btn-edit-snapshot").disabled = false;
+    document.getElementById("snapshot-select").value = date;
+    currentSnapshot = await API.get(date);
     document.getElementById("btn-save-snapshot").disabled = false;
+    editingCategories.clear();
     renderSnapshot(currentSnapshot);
 };
 

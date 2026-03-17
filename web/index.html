@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asset Tracker</title>
+    <title>Game Resource Tracker</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
     <header>
-        <h1>Asset Tracker</h1>
+        <h1>Game Resource Tracker</h1>
         <nav>
             <button id="nav-overview" class="nav-btn active">總覽</button>
             <button id="nav-compare" class="nav-btn">比較</button>
@@ -26,8 +26,7 @@
                     <button class="cur-btn" data-mode="twd">TWD</button>
                     <button class="cur-btn" data-mode="usd">USD</button>
                 </div>
-                <button id="btn-new-snapshot">+ 新增</button>
-                <button id="btn-edit-snapshot" disabled>編輯</button>
+                <button id="btn-new-snapshot">+ 新增 Snapshot</button>
                 <button id="btn-calculate">計算市值</button>
                 <button id="btn-save-snapshot" disabled>儲存</button>
             </div>
@@ -58,17 +57,24 @@
         </section>
     </main>
 
-    <!-- Edit Modal -->
-    <div id="edit-modal" class="modal" style="display:none">
-        <div class="modal-content">
+    <!-- New Snapshot Modal (date/note/rate only) -->
+    <div id="new-modal" class="modal" style="display:none">
+        <div class="modal-content" style="max-width:400px">
             <div class="modal-header">
-                <h2 id="modal-title">編輯 Snapshot</h2>
-                <button id="modal-close">&times;</button>
+                <h2>新增 Snapshot</h2>
+                <button id="new-modal-close">&times;</button>
             </div>
-            <div id="modal-body"></div>
+            <div id="new-modal-body" style="padding:1rem">
+                <div class="form-group"><label>日期</label><input id="new-date" type="date"></div>
+                <div class="form-group"><label>備註</label><input id="new-note" type="text" placeholder="Q1 整理..."></div>
+                <div class="form-group"><label>USD/TWD 匯率</label><input id="new-rate" type="number" step="0.1" value="32"></div>
+                <div class="form-group">
+                    <label><input type="checkbox" id="new-copy-existing"> 複製目前 Snapshot 的資產資料</label>
+                </div>
+            </div>
             <div class="modal-footer">
-                <button id="modal-save">儲存</button>
-                <button id="modal-cancel">取消</button>
+                <button id="new-modal-save">建立</button>
+                <button id="new-modal-cancel">取消</button>
             </div>
         </div>
     </div>
