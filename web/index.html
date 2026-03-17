@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    <header>
+        <h1>Asset Tracker</h1>
+        <nav>
+            <button id="nav-overview" class="nav-btn active">總覽</button>
+            <button id="nav-compare" class="nav-btn">比較</button>
+            <button id="nav-chart" class="nav-btn">趨勢</button>
+        </nav>
+    </header>
+    <main>
+        <!-- Overview View -->
+        <section id="view-overview">
+            <div class="toolbar">
+                <select id="snapshot-select"><option value="">選擇 Snapshot...</option></select>
+                <div class="currency-toggle">
+                    <button class="cur-btn active" data-mode="original">原幣</button>
+                    <button class="cur-btn" data-mode="twd">TWD</button>
+                    <button class="cur-btn" data-mode="usd">USD</button>
+                </div>
+                <button id="btn-new-snapshot">+ 新增</button>
+                <button id="btn-edit-snapshot" disabled>編輯</button>
+                <button id="btn-calculate">計算市值</button>
+                <button id="btn-save-snapshot" disabled>儲存</button>
+            </div>
+            <div id="snapshot-content"></div>
+            <div id="snapshot-totals"></div>
+        </section>
+
+        <!-- Compare View -->
+        <section id="view-compare" style="display:none">
+            <div class="toolbar">
+                <select id="compare-a"><option value="">Snapshot A...</option></select>
+                <select id="compare-b"><option value="">Snapshot B...</option></select>
+                <button id="btn-compare">比較</button>
+            </div>
+            <div id="compare-content"></div>
+        </section>
+
+        <!-- Chart View -->
+        <section id="view-chart" style="display:none">
+            <div class="toolbar">
+                <div class="currency-toggle">
+                    <button class="chart-cur-btn active" data-mode="twd">TWD</button>
+                    <button class="chart-cur-btn" data-mode="usd">USD</button>
+                    <button class="chart-cur-btn" data-mode="original">原幣</button>
+                </div>
+            </div>
+            <canvas id="trend-chart"></canvas>
+        </section>
+    </main>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="modal" style="display:none">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">編輯 Snapshot</h2>
+                <button id="modal-close">&times;</button>
+            </div>
+            <div id="modal-body"></div>
+            <div class="modal-footer">
+                <button id="modal-save">儲存</button>
+                <button id="modal-cancel">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
