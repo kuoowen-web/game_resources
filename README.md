@@ -2,10 +2,31 @@
 
 研究理財與金錢相關的事情，製作自用的理財小工具。
 
+## 工具：Asset Tracker
+
+本地 webapp，用來記錄和分析個人資產快照。
+
+**功能：** 資產總覽、多幣別切換（原幣/TWD/USD）、即時市值計算機、Snapshot 比較、趨勢圖表
+
+**技術：** Flask + 純 HTML/CSS/JS + Chart.js，JSON 檔案當資料庫
+
+**啟動：** 雙擊 `start.bat`，或手動：
+
+```bash
+venv\Scripts\activate
+cd server
+python app.py
+```
+
+開啟 http://localhost:5000
+
+**設計文件：** `docs/2026-03-17-asset-tracker-design.md`
+
 ## 開始使用
 
 1. 複製 `player_stats.example.md` 為 `player_stats.md`，填入自己的財務資料
 2. 複製 `insights.example.md` 為 `insights.md`，記錄研究結論
+3. 執行 `pip install -r requirements.txt` 安裝依賴（首次使用）
 
 這兩個檔案已加入 `.gitignore`，不會被 commit。
 

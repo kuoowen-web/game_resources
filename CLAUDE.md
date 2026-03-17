@@ -10,6 +10,12 @@
 - `player_stats.md` 和 `insights.md` 包含個人財務資料，不可 commit
 - 寫入 `insights.md` 時不得包含可識別個人的財務數字，只記錄通用的研究結論
 
+## 專案工具
+
+- **Asset Tracker**：資產快照 webapp，啟動方式：`start.bat` 或 `cd server && python app.py`（port 5000）
+  - 設計文件：`docs/2026-03-17-asset-tracker-design.md`
+  - 資料：`data/snapshots/YYYY-MM-DD.json`
+
 ## 工作流程
 
 - 當對話中產生關鍵 insight 或得出結論時，主動詢問使用者是否要記錄到 `insights.md`
