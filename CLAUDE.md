@@ -12,9 +12,11 @@
 
 ## 專案工具
 
-- **Asset Tracker**：資產快照 webapp，啟動方式：`start.bat` 或 `cd server && python app.py`（port 5000）
+- **Game Resource Tracker**：資產快照 webapp，啟動方式：`start.bat` 或 `cd server && python app.py`（port 5000）
   - 設計文件：`docs/2026-03-17-asset-tracker-design.md`
   - 資料：`data/snapshots/YYYY-MM-DD.json`
+  - 偽裝模式：預設顯示遊戲用語，在總覽區鍵盤輸入密碼解鎖真實資料
+  - 每個資產類別有 inline 編輯按鈕（解鎖後可見）
 
 ## 工作流程
 
