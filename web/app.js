@@ -312,4 +312,156 @@ async function saveSnapshot() {
 document.getElementById("btn-calculate").onclick = calculateMarketValues;
 document.getElementById("btn-save-snapshot").onclick = saveSnapshot;
 
+// === Edit Modal ===
+const ASSET_FIELDS = {
+    deposits: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "amount", label: "金額", type: "number"}
+    ],
+    insurance: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "type", label: "類型", type: "select", options: ["savings", "health"]},
+        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "surrender_value", label: "保單價值", type: "number"},
+        {key: "annual_premium", label: "年繳保費", type: "number"},
+        {key: "paid_years", label: "已繳年數", type: "number"},
+        {key: "total_years", label: "總繳年數", type: "number"}
+    ],
+    bonds: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "units", label: "單位數", type: "number"},
+        {key: "face_value_per_unit", label: "面額/單位", type: "number"},
+        {key: "coupon_rate", label: "票面利率", type: "number", step: "0.001"},
+        {key: "purchase_year", label: "購買年份", type: "number"},
+        {key: "maturity_year", label: "到期年份", type: "number"}
+    ],
+    structured_products: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "currency", label: "幣別", type: "select", options: ["TWD", "USD"]},
+        {key: "principal", label: "本金", type: "number"},
+        {key: "account_value", label: "帳戶價值", type: "number"},
+        {key: "linked_to", label: "連結標的", type: "text"},
+        {key: "maturity_date", label: "到期日 (YYYY-MM)", type: "text"}
+    ],
+    tw_stocks: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "shares", label: "股數", type: "number"},
+        {key: "avg_cost", label: "均成本", type: "number"}
+    ],
+    us_stocks: [
+        {key: "name", label: "名稱", type: "text"},
+        {key: "shares", label: "股數", type: "number"},
+        {key: "avg_cost", label: "均成本", type: "number"}
+    ]
+};
+
+function openEditModal(snapshot, isNew = false) {
+    const modal = document.getElementById("edit-modal");
+    const body = document.getElementById("modal-body");
+    const title = document.getElementById("modal-title");
+    title.textContent = isNew ? "新增 Snapshot" : `編輯 ${snapshot.date}`;
+    modal.style.display = "flex";
+    body.innerHTML = buildEditForm(snapshot);
+}
+
+function buildEditForm(snapshot) {
+    const s = snapshot || {date: new Date().toISOString().slice(0, 10), note: "", exchange_rates: {USD_TWD: 32}, assets: {}};
+    let html = `
+        <div class="form-group"><label>日期</label><input id="edit-date" type="date" value="${s.date}"></div>
+        <div class="form-group"><label>備註</label><input id="edit-note" type="text" value="${s.note || ""}"></div>
+        <div class="form-group"><label>USD/TWD 匯率</label><input id="edit-rate" type="number" step="0.1" value="${s.exchange_rates?.USD_TWD || 32}"></div>
+    `;
+
+    for (const [cat, fields] of Object.entries(ASSET_FIELDS)) {
+        const items = s.assets?.[cat] || [];
+        html += `<div class="form-section" data-cat="${cat}">
+            <div class="form-section-header"><h3>${CATEGORY_LABELS[cat]}</h3><button type="button" class="btn-add-item" onclick="addItemRow('${cat}')">+ 新增</button></div>
+            <div class="item-list" id="items-${cat}">`;
+        items.forEach((item, idx) => {
+            html += buildItemRow(cat, fields, item, idx);
+        });
+        html += `</div></div>`;
+    }
+    return html;
+}
+
+function buildItemRow(cat, fields, item, idx) {
+    let html = `<div class="form-item" data-idx="${idx}">
+        <button type="button" class="btn-remove-item" onclick="this.parentElement.remove()">✕</button>`;
+    for (const f of fields) {
+        const val = item?.[f.key] ?? "";
+        if (f.type === "select") {
+            const opts = f.options.map(o => `<option value="${o}"${val === o ? " selected" : ""}>${o}</option>`).join("");
+            html += `<div class="form-group" style="display:inline-block;width:auto;margin-right:0.5rem"><label>${f.label}</label><select data-key="${f.key}">${opts}</select></div>`;
+        } else {
+            html += `<div class="form-group" style="display:inline-block;width:auto;margin-right:0.5rem"><label>${f.label}</label><input type="${f.type}" data-key="${f.key}" value="${val}"${f.step ? ` step="${f.step}"` : ""}></div>`;
+        }
+    }
+    html += `</div>`;
+    return html;
+}
+
+function addItemRow(cat) {
+    const container = document.getElementById(`items-${cat}`);
+    const fields = ASSET_FIELDS[cat];
+    const idx = container.children.length;
+    container.insertAdjacentHTML("beforeend", buildItemRow(cat, fields, {}, idx));
+}
+
+function collectFormData() {
+    const snapshot = {
+        date: document.getElementById("edit-date").value,
+        note: document.getElementById("edit-note").value,
+        exchange_rates: {USD_TWD: parseFloat(document.getElementById("edit-rate").value)},
+        assets: {}
+    };
+    for (const cat of Object.keys(ASSET_FIELDS)) {
+        const items = [];
+        const container = document.getElementById(`items-${cat}`);
+        if (!container) continue;
+        for (const itemDiv of container.querySelectorAll(".form-item")) {
+            const item = {};
+            for (const input of itemDiv.querySelectorAll("[data-key]")) {
+                const key = input.dataset.key;
+                const val = input.value;
+                item[key] = input.type === "number" ? (val !== "" ? parseFloat(val) : null) : val;
+            }
+            if (cat === "tw_stocks") item.currency = "TWD";
+            if (cat === "us_stocks") item.currency = "USD";
+            items.push(item);
+        }
+        snapshot.assets[cat] = items;
+    }
+    return snapshot;
+}
+
+document.getElementById("btn-new-snapshot").onclick = () => {
+    if (currentSnapshot) {
+        const copy = JSON.parse(JSON.stringify(currentSnapshot));
+        copy.date = new Date().toISOString().slice(0, 10);
+        copy.note = "";
+        openEditModal(copy, true);
+    } else {
+        openEditModal(null, true);
+    }
+};
+document.getElementById("btn-edit-snapshot").onclick = () => openEditModal(currentSnapshot, false);
+document.getElementById("modal-close").onclick = () => document.getElementById("edit-modal").style.display = "none";
+document.getElementById("modal-cancel").onclick = () => document.getElementById("edit-modal").style.display = "none";
+
+document.getElementById("modal-save").onclick = async () => {
+    const data = collectFormData();
+    if (!data.date) { alert("請輸入日期"); return; }
+    await API.create(data);
+    document.getElementById("edit-modal").style.display = "none";
+    await loadSnapshotList();
+    document.getElementById("snapshot-select").value = data.date;
+    currentSnapshot = await API.get(data.date);
+    document.getElementById("btn-edit-snapshot").disabled = false;
+    document.getElementById("btn-save-snapshot").disabled = false;
+    renderSnapshot(currentSnapshot);
+};
+
 init();
