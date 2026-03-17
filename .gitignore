@@ -9,4 +9,5 @@ venv/
 __pycache__/
 *.pyc
 data/snapshots/*.json
+!data/snapshots/example.json
 !data/snapshots/.gitkeep

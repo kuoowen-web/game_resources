@@ -1,0 +1,34 @@
+{
+  "date": "2026-01-01",
+  "note": "範例資料",
+  "exchange_rates": {
+    "USD_TWD": 32.5,
+    "JPY_TWD": 0.21,
+    "EUR_TWD": 36.0
+  },
+  "assets": {
+    "deposits": [
+      {"name": "台銀活存", "currency": "TWD", "amount": 500000},
+      {"name": "美元帳戶", "currency": "USD", "amount": 10000}
+    ],
+    "insurance": [
+      {"name": "美元儲蓄險", "type": "savings", "currency": "USD", "surrender_value": 15000, "annual_premium": 3000, "paid_years": 3, "total_years": 6},
+      {"name": "重大傷病險", "type": "health", "currency": "TWD", "surrender_value": 50000, "annual_premium": 25000, "paid_years": 2, "total_years": 20}
+    ],
+    "bonds": [
+      {"name": "A公司債", "currency": "USD", "units": 10, "face_value_per_unit": 1000, "coupon_rate": 0.045, "purchase_year": 2024, "maturity_year": 2029}
+    ],
+    "structured_products": [
+      {"name": "利率連動商品", "currency": "USD", "principal": 20000, "account_value": 19500, "linked_to": "S&P500", "maturity_date": "2027-06"}
+    ],
+    "tw_stocks": [
+      {"name": "2330 台積電", "currency": "TWD", "shares": 10, "avg_cost": 580}
+    ],
+    "us_stocks": [
+      {"name": "VOO", "currency": "USD", "shares": 5, "avg_cost": 480}
+    ],
+    "crypto": [
+      {"name": "BTC", "currency": "USD", "amount": 0.1, "avg_cost": 60000, "current_price": 65000}
+    ]
+  }
+}
