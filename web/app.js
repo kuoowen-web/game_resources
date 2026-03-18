@@ -158,6 +158,10 @@ document.addEventListener("keydown", (e) => {
             if (btn.dataset.mode === "usd") btn.textContent = disguised ? "Diamond" : "USD";
         });
         showStrategySection();
+        if (document.getElementById("view-compare").style.display !== "none") {
+            buildStrategyUI();
+            if (lastCompareA && lastCompareB) compareSnapshots(lastCompareA, lastCompareB);
+        }
     }
 });
 
