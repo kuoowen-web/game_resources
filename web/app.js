@@ -772,8 +772,25 @@ function collectStrategies() {
 }
 
 function calculateStrategy(principal, strategy, days) {
-    // Stub: implemented in Task 3
-    return principal;
+    switch (strategy.type) {
+        case "deposit": {
+            const rate = strategy.rate;
+            return principal * Math.pow(1 + rate / 100, days / 365);
+        }
+        case "index": {
+            if (!strategy.startPrice || strategy.startPrice <= 0) return principal;
+            return principal * (strategy.endPrice / strategy.startPrice);
+        }
+        case "mix": {
+            return strategy.allocations.reduce((sum, alloc) => {
+                const subPrincipal = principal * alloc.pct / 100;
+                const subStrategy = {type: alloc.type, ...alloc.params};
+                return sum + calculateStrategy(subPrincipal, subStrategy, days);
+            }, 0);
+        }
+        default:
+            return principal;
+    }
 }
 
 function checkMissingRates(snapshot) {
