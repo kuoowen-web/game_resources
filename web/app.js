@@ -782,6 +782,7 @@ function showStrategySection() {
 }
 
 function buildStrategyUI() {
+    strategyCounter = 0;
     const section = document.getElementById("compare-strategies");
     section.innerHTML = "";
     section.style.display = disguised ? "none" : "";
@@ -1145,7 +1146,6 @@ function compareSnapshots(a, b) {
 function renderCompareGrandTotal(container, totalA, totalB, snapA, snapB, missingRates) {
     const strategies = collectStrategies();
     const days = (new Date(snapB.date) - new Date(snapA.date)) / (1000 * 60 * 60 * 24);
-    const ratesA = snapA.exchange_rates || {};
 
     const delta = totalB - totalA;
     const pct = totalA !== 0 ? ((delta / totalA) * 100).toFixed(1) + "%" : "—";
