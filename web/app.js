@@ -47,7 +47,10 @@ function switchView(name) {
 }
 
 document.getElementById("nav-overview").onclick = () => switchView("overview");
-document.getElementById("nav-compare").onclick = () => switchView("compare");
+document.getElementById("nav-compare").onclick = () => {
+    switchView("compare");
+    buildStrategyUI();
+};
 document.getElementById("nav-chart").onclick = () => switchView("chart");
 
 document.querySelectorAll(".compare-cur-btn").forEach(btn => {
@@ -154,6 +157,7 @@ document.addEventListener("keydown", (e) => {
             if (btn.dataset.mode === "twd") btn.textContent = disguised ? "Gold" : "TWD";
             if (btn.dataset.mode === "usd") btn.textContent = disguised ? "Diamond" : "USD";
         });
+        showStrategySection();
     }
 });
 
@@ -766,9 +770,213 @@ document.getElementById("new-modal-save").onclick = async () => {
 };
 
 // === Strategy Calculation ===
+let strategyCounter = 0;
+
+function showStrategySection() {
+    const section = document.getElementById("compare-strategies");
+    section.style.display = disguised ? "none" : "";
+}
+
+function buildStrategyUI() {
+    const section = document.getElementById("compare-strategies");
+    section.innerHTML = "";
+    section.style.display = disguised ? "none" : "";
+
+    const header = document.createElement("div");
+    header.className = "strategy-header";
+    header.innerHTML = `<h3>假設策略</h3>`;
+    const addBtn = document.createElement("button");
+    addBtn.className = "btn-add-strategy";
+    addBtn.textContent = "+ 新增策略";
+    const rowsContainer = document.createElement("div");
+    rowsContainer.id = "strategy-rows";
+    addBtn.onclick = () => {
+        strategyCounter++;
+        rowsContainer.appendChild(buildStrategyRow(strategyCounter));
+    };
+    header.appendChild(addBtn);
+    section.appendChild(header);
+    section.appendChild(rowsContainer);
+}
+
+function buildStrategyRow(id) {
+    const row = document.createElement("div");
+    row.className = "strategy-row";
+    row.dataset.id = id;
+
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "strategy-name";
+    nameInput.value = `策略 ${id}`;
+    nameInput.style.width = "100px";
+
+    const typeSelect = document.createElement("select");
+    typeSelect.className = "strategy-type";
+    typeSelect.innerHTML = `
+        <option value="deposit">定存</option>
+        <option value="index">指數追蹤</option>
+        <option value="mix">混合</option>
+    `;
+
+    const paramsDiv = document.createElement("div");
+    paramsDiv.className = "strategy-params";
+    renderStrategyParams(paramsDiv, "deposit", id);
+
+    typeSelect.onchange = () => renderStrategyParams(paramsDiv, typeSelect.value, id);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn-remove-row";
+    removeBtn.textContent = "✕";
+    removeBtn.onclick = () => row.remove();
+
+    row.appendChild(nameInput);
+    row.appendChild(typeSelect);
+    row.appendChild(paramsDiv);
+    row.appendChild(removeBtn);
+
+    return row;
+}
+
+function renderStrategyParams(container, type, id) {
+    container.innerHTML = "";
+    switch (type) {
+        case "deposit":
+            container.innerHTML = `<label>年利率 %</label><input type="number" class="param-rate" step="0.1" value="2" style="width:70px">`;
+            break;
+        case "index":
+            container.innerHTML = `
+                <label>名稱</label><input type="text" class="param-index-name" value="S&P 500" style="width:80px">
+                <label>起始價</label><input type="number" class="param-start" step="0.01" style="width:80px">
+                <label>結束價</label><input type="number" class="param-end" step="0.01" style="width:80px">
+            `;
+            break;
+        case "mix":
+            container.innerHTML = `<div class="mix-allocations"></div><div class="mix-summary"></div>`;
+            const allocDiv = container.querySelector(".mix-allocations");
+            const addAllocBtn = document.createElement("button");
+            addAllocBtn.className = "btn-add-row";
+            addAllocBtn.textContent = "+ 新增配置";
+            addAllocBtn.onclick = () => {
+                allocDiv.appendChild(buildMixAllocationRow());
+                updateMixSummary(container);
+            };
+            container.appendChild(addAllocBtn);
+            break;
+    }
+}
+
+function buildMixAllocationRow() {
+    const row = document.createElement("div");
+    row.className = "mix-alloc-row";
+    row.innerHTML = `
+        <input type="number" class="alloc-pct" min="0" max="100" step="1" placeholder="%" style="width:50px">
+        <span>%</span>
+        <select class="alloc-type">
+            <option value="deposit">定存</option>
+            <option value="index">指數追蹤</option>
+        </select>
+        <span class="alloc-params"></span>
+    `;
+    const typeSelect = row.querySelector(".alloc-type");
+    const paramsSpan = row.querySelector(".alloc-params");
+    renderAllocParams(paramsSpan, "deposit");
+    typeSelect.onchange = () => renderAllocParams(paramsSpan, typeSelect.value);
+
+    row.querySelector(".alloc-pct").onchange = () => {
+        updateMixSummary(row.closest(".strategy-params"));
+    };
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn-remove-row";
+    removeBtn.textContent = "✕";
+    removeBtn.onclick = () => {
+        const params = row.closest(".strategy-params");
+        row.remove();
+        updateMixSummary(params);
+    };
+    row.appendChild(removeBtn);
+    return row;
+}
+
+function renderAllocParams(container, type) {
+    if (type === "deposit") {
+        container.innerHTML = `<label>年利率%</label><input type="number" class="alloc-rate" step="0.1" value="2" style="width:60px">`;
+    } else {
+        container.innerHTML = `
+            <input type="text" class="alloc-index-name" placeholder="名稱" style="width:70px">
+            <label>起始</label><input type="number" class="alloc-start" step="0.01" style="width:70px">
+            <label>結束</label><input type="number" class="alloc-end" step="0.01" style="width:70px">
+        `;
+    }
+}
+
+function updateMixSummary(paramsContainer) {
+    if (!paramsContainer) return;
+    const summary = paramsContainer.querySelector(".mix-summary");
+    if (!summary) return;
+    const rows = paramsContainer.querySelectorAll(".mix-alloc-row");
+    let total = 0;
+    rows.forEach(r => {
+        total += parseFloat(r.querySelector(".alloc-pct")?.value || 0);
+    });
+    const remaining = 100 - total;
+    summary.textContent = `目前 ${total}%，剩餘 ${remaining}%`;
+    summary.style.color = total === 100 ? "#27ae60" : total > 100 ? "#e74c3c" : "#666";
+}
+
 function collectStrategies() {
-    // Stub: returns empty array until strategy UI is built
-    return [];
+    const rows = document.querySelectorAll(".strategy-row");
+    const strategies = [];
+    for (const row of rows) {
+        const name = row.querySelector(".strategy-name")?.value || "策略";
+        const type = row.querySelector(".strategy-type")?.value;
+        const params = row.querySelector(".strategy-params");
+        if (!type || !params) continue;
+
+        switch (type) {
+            case "deposit": {
+                const rate = parseFloat(params.querySelector(".param-rate")?.value) || 0;
+                strategies.push({name, type: "deposit", rate});
+                break;
+            }
+            case "index": {
+                const startPrice = parseFloat(params.querySelector(".param-start")?.value) || 0;
+                const endPrice = parseFloat(params.querySelector(".param-end")?.value) || 0;
+                if (startPrice <= 0 || endPrice < 0) break;
+                strategies.push({name, type: "index", startPrice, endPrice});
+                break;
+            }
+            case "mix": {
+                const allocRows = params.querySelectorAll(".mix-alloc-row");
+                const allocations = [];
+                let totalPct = 0;
+                for (const ar of allocRows) {
+                    const pct = parseFloat(ar.querySelector(".alloc-pct")?.value) || 0;
+                    const aType = ar.querySelector(".alloc-type")?.value;
+                    totalPct += pct;
+                    if (aType === "deposit") {
+                        const rate = parseFloat(ar.querySelector(".alloc-rate")?.value) || 0;
+                        allocations.push({pct, type: "deposit", params: {rate}});
+                    } else {
+                        const startPrice = parseFloat(ar.querySelector(".alloc-start")?.value) || 0;
+                        const endPrice = parseFloat(ar.querySelector(".alloc-end")?.value) || 0;
+                        allocations.push({pct, type: "index", params: {startPrice, endPrice}});
+                    }
+                }
+                if (Math.abs(totalPct - 100) > 0.01) {
+                    const summary = params.querySelector(".mix-summary");
+                    if (summary) {
+                        summary.textContent = `配置比例必須合計 100%（目前 ${totalPct}%）`;
+                        summary.style.color = "#e74c3c";
+                    }
+                    break;
+                }
+                strategies.push({name, type: "mix", allocations});
+                break;
+            }
+        }
+    }
+    return strategies;
 }
 
 function calculateStrategy(principal, strategy, days) {
