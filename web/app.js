@@ -765,15 +765,58 @@ document.getElementById("new-modal-save").onclick = async () => {
     renderSnapshot(currentSnapshot);
 };
 
+// === Strategy Calculation ===
+function collectStrategies() {
+    // Stub: returns empty array until strategy UI is built
+    return [];
+}
+
+function calculateStrategy(principal, strategy, days) {
+    // Stub: implemented in Task 3
+    return principal;
+}
+
+function checkMissingRates(snapshot) {
+    const rates = snapshot.exchange_rates || {};
+    const missing = [];
+    const currenciesUsed = new Set();
+    for (const items of Object.values(snapshot.assets || {})) {
+        for (const item of items) {
+            if (item.currency && item.currency !== "TWD") currenciesUsed.add(item.currency);
+        }
+    }
+    for (const cur of currenciesUsed) {
+        const key = `${cur}_TWD`;
+        if (!rates[key]) missing.push(key);
+    }
+    return missing;
+}
+
 // === Comparison ===
 function compareSnapshots(a, b) {
+    lastCompareA = a;
+    lastCompareB = b;
+
     const container = document.getElementById("compare-content");
+    const grandTotalContainer = document.getElementById("compare-grand-total");
     const hdrA = disguised ? `Season ${a.date}` : a.date;
     const hdrB = disguised ? `Season ${b.date}` : b.date;
     container.innerHTML = `<h2>${hdrA} vs ${hdrB}</h2>`;
+    grandTotalContainer.innerHTML = "";
 
     const nameLabel = disguised ? "Item" : "名稱";
     const deltaLabel = disguised ? "Delta" : "變化";
+    const subtotalLabel = disguised ? "Subtotal" : "小計";
+
+    const ratesA = a.exchange_rates || {};
+    const ratesB = b.exchange_rates || {};
+    const mode = compareCurrencyMode;
+
+    // Track grand totals (always in TWD for strategy comparison)
+    let grandTotalA_TWD = 0;
+    let grandTotalB_TWD = 0;
+    const missingRatesA = new Set();
+    const missingRatesB = new Set();
 
     const categories = Object.keys(CATEGORY_LABELS);
     for (const cat of categories) {
@@ -792,15 +835,38 @@ function compareSnapshots(a, b) {
         const tbody = document.createElement("tbody");
         const allNames = [...new Set([...itemsA.map(i => i.name), ...itemsB.map(i => i.name)])];
 
+        // Track subtotals by currency
+        const subtotalA = {};
+        const subtotalB = {};
+
         for (let i = 0; i < allNames.length; i++) {
             const name = allNames[i];
             const itemA = itemsA.find(it => it.name === name);
             const itemB = itemsB.find(it => it.name === name);
-            const valA = itemA ? getAssetValue(cat, itemA) : 0;
-            const valB = itemB ? getAssetValue(cat, itemB) : 0;
-            const currency = (itemA || itemB).currency || "TWD";
-            const delta = valB - valA;
-            const pct = valA !== 0 ? ((delta / valA) * 100).toFixed(1) + "%" : "—";
+            const rawValA = itemA ? getAssetValue(cat, itemA) : 0;
+            const rawValB = itemB ? getAssetValue(cat, itemB) : 0;
+            const origCurrency = (itemA || itemB).currency || "TWD";
+
+            // Accumulate TWD grand totals (always, regardless of display mode)
+            const rateA = getRate(ratesA, origCurrency);
+            const rateB = getRate(ratesB, origCurrency);
+            if (rateA == null && origCurrency !== "TWD") missingRatesA.add(`${origCurrency}_TWD`);
+            if (rateB == null && origCurrency !== "TWD") missingRatesB.add(`${origCurrency}_TWD`);
+            grandTotalA_TWD += rawValA * (rateA || 0);
+            grandTotalB_TWD += rawValB * (rateB || 0);
+
+            // Convert for display
+            const convA = convertValue(rawValA, origCurrency, mode, ratesA);
+            const convB = convertValue(rawValB, origCurrency, mode, ratesB);
+            const displayCurrency = convA.currency;
+
+            // Accumulate subtotals in display currency
+            const subKey = displayCurrency;
+            subtotalA[subKey] = (subtotalA[subKey] || 0) + convA.value;
+            subtotalB[subKey] = (subtotalB[subKey] || 0) + convB.value;
+
+            const delta = convB.value - convA.value;
+            const pct = convA.value !== 0 ? ((delta / convA.value) * 100).toFixed(1) + "%" : "—";
 
             const tr = document.createElement("tr");
             const deltaClass = !itemA ? "delta-new" : !itemB ? "delta-removed" : delta >= 0 ? "delta-positive" : "delta-negative";
@@ -808,22 +874,135 @@ function compareSnapshots(a, b) {
             const dName = disguiseName(name, cat, i);
 
             tr.innerHTML = `<td class="${!itemA ? "delta-new" : !itemB ? "delta-removed" : ""}">${dName}</td>
-                <td>${itemA ? formatMoney(valA, currency) : "—"}</td>
-                <td>${itemB ? formatMoney(valB, currency) : "—"}</td>
-                <td class="${deltaClass}">${sign}${formatMoney(Math.abs(delta), currency)}</td>
+                <td>${itemA ? formatMoney(convA.value, displayCurrency) : "—"}</td>
+                <td>${itemB ? formatMoney(convB.value, displayCurrency) : "—"}</td>
+                <td class="${deltaClass}">${sign}${formatMoney(Math.abs(delta), displayCurrency)}</td>
                 <td class="${deltaClass}">${pct}</td>`;
             tbody.appendChild(tr);
         }
+
+        // Subtotal rows
+        const currencies = Object.keys(subtotalA).concat(Object.keys(subtotalB));
+        const uniqueCurrencies = [...new Set(currencies)];
+        for (const cur of uniqueCurrencies) {
+            const sA = subtotalA[cur] || 0;
+            const sB = subtotalB[cur] || 0;
+            const sDelta = sB - sA;
+            const sPct = sA !== 0 ? ((sDelta / sA) * 100).toFixed(1) + "%" : "—";
+            const sSign = sDelta >= 0 ? "+" : "";
+            const sDeltaClass = sDelta >= 0 ? "delta-positive" : "delta-negative";
+
+            const subRow = document.createElement("tr");
+            subRow.className = "subtotal-row";
+            const curLabel = uniqueCurrencies.length > 1 && mode === "original" ? ` (${disguiseCurrency(cur)})` : "";
+            subRow.innerHTML = `<td>${subtotalLabel}${curLabel}</td>
+                <td>${formatMoney(sA, cur)}</td>
+                <td>${formatMoney(sB, cur)}</td>
+                <td class="${sDeltaClass}">${sSign}${formatMoney(Math.abs(sDelta), cur)}</td>
+                <td class="${sDeltaClass}">${sPct}</td>`;
+            tbody.appendChild(subRow);
+        }
+
         table.appendChild(tbody);
         div.appendChild(table);
         container.appendChild(div);
     }
+
+    // Grand total block
+    const allMissing = new Set([...missingRatesA, ...missingRatesB]);
+    renderCompareGrandTotal(grandTotalContainer, grandTotalA_TWD, grandTotalB_TWD, a, b, allMissing);
+}
+
+function renderCompareGrandTotal(container, totalA, totalB, snapA, snapB, missingRates) {
+    const strategies = collectStrategies();
+    const days = (new Date(snapB.date) - new Date(snapA.date)) / (1000 * 60 * 60 * 24);
+    const ratesA = snapA.exchange_rates || {};
+
+    const delta = totalB - totalA;
+    const pct = totalA !== 0 ? ((delta / totalA) * 100).toFixed(1) + "%" : "—";
+    const sign = delta >= 0 ? "+" : "";
+    const deltaClass = delta >= 0 ? "delta-positive" : "delta-negative";
+    const totalLabel = disguised ? "Grand Total" : "總計 (TWD)";
+
+    // Check if strategies can be calculated
+    let strategyError = null;
+    let strategyResults = [];
+
+    if (strategies.length > 0) {
+        if (days <= 0) {
+            strategyError = disguised ? "Snapshot A must be before Snapshot B for strategy calculation" : "Snapshot A 必須早於 Snapshot B 才能計算假設策略";
+        } else {
+            // Check for missing exchange rates
+            const missingRatesList = checkMissingRates(snapA);
+            if (missingRatesList.length > 0) {
+                strategyError = (disguised ? "Missing exchange rate: " : "缺少匯率: ") + missingRatesList.join(", ");
+            } else {
+                strategyResults = strategies.map(s => ({
+                    name: s.name,
+                    value: calculateStrategy(totalA, s, days)
+                }));
+            }
+        }
+    }
+
+    // Build table
+    const div = document.createElement("div");
+    div.className = "compare-grand-total";
+
+    let strategyHeaders = "";
+    let strategyCells = "";
+
+    if (!disguised && strategyResults.length > 0) {
+        for (const sr of strategyResults) {
+            strategyHeaders += `<th>${sr.name}</th>`;
+            const sDelta = sr.value - totalA;
+            const sPct = totalA !== 0 ? ((sDelta / totalA) * 100).toFixed(1) : "0";
+            const sSign = sDelta >= 0 ? "+" : "";
+            const sDeltaClass = sDelta >= 0 ? "delta-positive" : "delta-negative";
+            strategyCells += `<td class="${sDeltaClass}">${formatMoney(sr.value, "TWD")}<br><small>${sSign}${formatMoney(Math.abs(sDelta), "TWD")} (${sSign}${sPct}%)</small></td>`;
+        }
+    }
+
+    div.innerHTML = `
+        <table class="asset-table grand-total-table">
+            <thead><tr>
+                <th></th><th>${disguised ? "Season " + snapA.date : snapA.date}</th>
+                <th>${disguised ? "Season " + snapB.date : snapB.date}</th>
+                <th>${disguised ? "Delta" : "變化"}</th><th>%</th>
+                ${strategyHeaders}
+            </tr></thead>
+            <tbody><tr class="subtotal-row">
+                <td>${totalLabel}</td>
+                <td>${formatMoney(totalA, "TWD")}</td>
+                <td>${formatMoney(totalB, "TWD")}</td>
+                <td class="${deltaClass}">${sign}${formatMoney(Math.abs(delta), "TWD")}</td>
+                <td class="${deltaClass}">${pct}</td>
+                ${strategyCells}
+            </tr></tbody>
+        </table>`;
+
+    if (missingRates && missingRates.size > 0) {
+        const warnDiv = document.createElement("div");
+        warnDiv.className = "strategy-warning";
+        const label = disguised ? "Total excludes some assets (missing rates: " : "總計不含部分資產（缺少匯率: ";
+        warnDiv.textContent = label + [...missingRates].join(", ") + ")";
+        div.appendChild(warnDiv);
+    }
+
+    if (strategyError) {
+        const errDiv = document.createElement("div");
+        errDiv.className = "strategy-error";
+        errDiv.textContent = strategyError;
+        div.appendChild(errDiv);
+    }
+
+    container.appendChild(div);
 }
 
 document.getElementById("btn-compare").onclick = async () => {
     const dateA = document.getElementById("compare-a").value;
     const dateB = document.getElementById("compare-b").value;
-    if (!dateA || !dateB) { alert("請選擇兩個 Snapshot"); return; }
+    if (!dateA || !dateB) { alert(disguised ? "Select two snapshots" : "請選擇兩個 Snapshot"); return; }
     const [a, b] = await Promise.all([API.get(dateA), API.get(dateB)]);
     compareSnapshots(a, b);
 };
