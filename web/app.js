@@ -50,11 +50,24 @@ document.getElementById("nav-overview").onclick = () => switchView("overview");
 document.getElementById("nav-compare").onclick = () => switchView("compare");
 document.getElementById("nav-chart").onclick = () => switchView("chart");
 
+document.querySelectorAll(".compare-cur-btn").forEach(btn => {
+    btn.onclick = function() {
+        document.querySelectorAll(".compare-cur-btn").forEach(b => b.classList.remove("active"));
+        this.classList.add("active");
+        compareCurrencyMode = this.dataset.mode;
+        // Re-render if comparison is already showing
+        if (lastCompareA && lastCompareB) compareSnapshots(lastCompareA, lastCompareB);
+    };
+});
+
 // === State ===
 let currentSnapshot = null;
 let currencyMode = "original";
 const editingCategories = new Set();
 let disguised = true;
+let compareCurrencyMode = "original";
+let lastCompareA = null;
+let lastCompareB = null;
 
 // === Currency Config ===
 const ALL_CURRENCIES = ["TWD", "USD", "JPY", "EUR"];
@@ -135,6 +148,11 @@ document.addEventListener("keydown", (e) => {
                 document.getElementById("snapshot-select").value = currentSnapshot.date;
                 renderSnapshot(currentSnapshot);
             }
+        });
+        document.querySelectorAll(".compare-cur-btn").forEach(btn => {
+            if (btn.dataset.mode === "original") btn.textContent = disguised ? "Split" : "原幣";
+            if (btn.dataset.mode === "twd") btn.textContent = disguised ? "Gold" : "TWD";
+            if (btn.dataset.mode === "usd") btn.textContent = disguised ? "Diamond" : "USD";
         });
     }
 });

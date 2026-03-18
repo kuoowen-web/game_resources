@@ -65,3 +65,8 @@ main { max-width: 1200px; margin: 1rem auto; padding: 0 1rem; }
 .snapshot-meta input { padding: 0.3rem 0.5rem; border: 1px solid #ddd; border-radius: 3px; }
 
 #trend-chart { background: white; border-radius: 8px; padding: 1rem; }
+
+.compare-cur-btn { border-radius: 0; border-right: none; }
+.compare-cur-btn:first-child { border-radius: 4px 0 0 4px; }
+.compare-cur-btn:last-child { border-radius: 0 4px 4px 0; border-right: 1px solid #ccc; }
+.compare-cur-btn.active { background: #2c3e50; color: white; border-color: #2c3e50; }
