@@ -1,34 +1,34 @@
 {
-  "date": "2026-01-01",
-  "note": "範例資料",
+  "date": "2099-01-01",
+  "note": "範例資料 — 請勿使用真實數據",
   "exchange_rates": {
-    "USD_TWD": 32.5,
-    "JPY_TWD": 0.21,
-    "EUR_TWD": 36.0
+    "USD_TWD": 30.0,
+    "JPY_TWD": 0.20,
+    "EUR_TWD": 35.0
   },
   "assets": {
     "deposits": [
-      {"name": "台銀活存", "currency": "TWD", "amount": 500000},
-      {"name": "美元帳戶", "currency": "USD", "amount": 10000}
+      {"name": "銀行A台幣", "currency": "TWD", "amount": 100000},
+      {"name": "銀行B外幣", "currency": "USD", "amount": 1000}
     ],
     "insurance": [
-      {"name": "美元儲蓄險", "type": "savings", "currency": "USD", "surrender_value": 15000, "annual_premium": 3000, "paid_years": 3, "total_years": 6},
-      {"name": "重大傷病險", "type": "health", "currency": "TWD", "surrender_value": 50000, "annual_premium": 25000, "paid_years": 2, "total_years": 20}
+      {"name": "範例儲蓄險", "type": "savings", "currency": "USD", "surrender_value": 5000, "annual_premium": 1000, "paid_years": 1, "total_years": 6},
+      {"name": "範例醫療險", "type": "health", "currency": "TWD", "surrender_value": 0, "annual_premium": 10000, "paid_years": 1, "total_years": 20}
     ],
     "bonds": [
-      {"name": "A公司債", "currency": "USD", "units": 10, "face_value_per_unit": 1000, "coupon_rate": 0.045, "purchase_year": 2024, "maturity_year": 2029}
+      {"name": "範例公司債", "currency": "USD", "units": 1, "face_value_per_unit": 1000, "coupon_rate": 0.04, "purchase_year": 2025, "maturity_year": 2030}
     ],
     "structured_products": [
-      {"name": "利率連動商品", "currency": "USD", "principal": 20000, "account_value": 19500, "linked_to": "S&P500", "maturity_date": "2027-06"}
+      {"name": "範例結構商品", "currency": "USD", "principal": 5000, "account_value": 4800, "linked_to": "某指數", "maturity_date": "2030-01"}
     ],
     "tw_stocks": [
-      {"name": "2330 台積電", "currency": "TWD", "shares": 10, "avg_cost": 580}
+      {"name": "0050 元大台灣50", "currency": "TWD", "shares": 10, "avg_cost": 150}
     ],
     "us_stocks": [
-      {"name": "VOO", "currency": "USD", "shares": 5, "avg_cost": 480}
+      {"name": "VTI", "currency": "USD", "shares": 2, "avg_cost": 250}
     ],
     "crypto": [
-      {"name": "BTC", "currency": "USD", "amount": 0.1, "avg_cost": 60000, "current_price": 65000}
+      {"name": "BTC", "currency": "USD", "amount": 0.001, "avg_cost": 50000, "current_price": 60000}
     ]
   }
 }
