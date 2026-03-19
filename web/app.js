@@ -1122,6 +1122,7 @@ async function compareSnapshots(a, b) {
     // Track grand totals (always in TWD for strategy comparison)
     let grandTotalA_TWD = 0;
     let grandTotalB_TWD = 0;
+    let grandTotalB_atRatesA = 0; // B's assets valued at A's exchange rates (for FX decomposition)
     const missingRatesA = new Set();
     const missingRatesB = new Set();
 
@@ -1164,6 +1165,7 @@ async function compareSnapshots(a, b) {
             if (rateB == null && origCurrency !== "TWD") missingRatesB.add(`${origCurrency}_TWD`);
             grandTotalA_TWD += rawValA * (rateA || 0);
             grandTotalB_TWD += rawValB * (rateB || 0);
+            grandTotalB_atRatesA += rawValB * (rateA || 0); // B assets at A's rates
 
             // Convert for display
             const convA = convertValue(rawValA, origCurrency, mode, ratesA);
@@ -1236,10 +1238,10 @@ async function compareSnapshots(a, b) {
 
     // Grand total block
     const allMissing = new Set([...missingRatesA, ...missingRatesB]);
-    await renderCompareGrandTotal(grandTotalContainer, grandTotalA_TWD, grandTotalB_TWD, a, b, allMissing);
+    await renderCompareGrandTotal(grandTotalContainer, grandTotalA_TWD, grandTotalB_TWD, grandTotalB_atRatesA, a, b, allMissing);
 }
 
-async function renderCompareGrandTotal(container, totalA, totalB, snapA, snapB, missingRates) {
+async function renderCompareGrandTotal(container, totalA, totalB, totalB_atRatesA, snapA, snapB, missingRates) {
     const strategies = collectStrategies();
     const days = (new Date(snapB.date) - new Date(snapA.date)) / (1000 * 60 * 60 * 24);
 
@@ -1326,6 +1328,19 @@ async function renderCompareGrandTotal(container, totalA, totalB, snapA, snapB, 
         }
 
         html += `<tr class="subtotal-row"><td>實際投資報酬（扣除現金流）</td><td style="text-align:right" class="${deltaClass}"><strong>${sign}${formatMoney(Math.abs(md.investmentGain), "TWD")}</strong></td></tr>`;
+
+        // FX decomposition
+        const fxImpact = totalB - totalB_atRatesA;
+        if (Math.abs(fxImpact) > 100) {
+            const assetReturn = md.investmentGain - fxImpact;
+            const fxSign = fxImpact >= 0 ? "+" : "";
+            const fxClass = fxImpact >= 0 ? "delta-positive" : "delta-negative";
+            const arSign = assetReturn >= 0 ? "+" : "";
+            const arClass = assetReturn >= 0 ? "delta-positive" : "delta-negative";
+            html += `<tr><td style="padding-left:1rem;color:#666">├ 匯率影響</td><td style="text-align:right" class="${fxClass}"><small>${fxSign}${formatMoney(Math.abs(fxImpact), "TWD")}</small></td></tr>`;
+            html += `<tr><td style="padding-left:1rem;color:#666">└ 資產本身變化</td><td style="text-align:right" class="${arClass}"><small>${arSign}${formatMoney(Math.abs(assetReturn), "TWD")}</small></td></tr>`;
+        }
+
         html += `<tr><td>報酬率（${daysLabel} 天）</td><td style="text-align:right" class="${deltaClass}">${(md.return * 100).toFixed(2)}%</td></tr>`;
         html += `<tr><td>年化報酬率</td><td style="text-align:right" class="${deltaClass}">${annPct}</td></tr>`;
 
@@ -1334,14 +1349,12 @@ async function renderCompareGrandTotal(container, totalA, totalB, snapA, snapB, 
             html += `<tr><td colspan="2" style="padding-top:1rem"><strong>假設策略比較</strong>　<small style="color:#999">（同樣的本金和現金流，如果全部用以下策略）</small></td></tr>`;
             for (const sr of strategyResults) {
                 const sSign = sr.gain >= 0 ? "+" : "";
-                const sEndMd = calcModifiedDietz(totalA, sr.endVal, periodCashflows, snapA.date, snapB.date);
-                const sAnnPct = days > 0 ? (sEndMd.annualized * 100).toFixed(1) + "%" : "—";
                 const sDeltaClass = sr.gain >= 0 ? "delta-positive" : "delta-negative";
                 const diff = md.investmentGain - sr.gain;
                 const diffSign = diff >= 0 ? "+" : "";
                 const diffClass = diff >= 0 ? "delta-positive" : "delta-negative";
-                html += `<tr><td style="padding-left:1rem">${sr.name}</td><td style="text-align:right" class="${sDeltaClass}">${sSign}${formatMoney(Math.abs(sr.gain), "TWD")}（年化 ${sAnnPct}）</td></tr>`;
-                html += `<tr><td style="padding-left:2rem;color:#999">vs 你的實際報酬</td><td style="text-align:right" class="${diffClass}"><small>${diffSign}${formatMoney(Math.abs(diff), "TWD")}</small></td></tr>`;
+                html += `<tr><td style="padding-left:1rem">${sr.name}</td><td style="text-align:right" class="${sDeltaClass}">${sSign}${formatMoney(Math.abs(sr.gain), "TWD")}（${daysLabel} 天）</td></tr>`;
+                html += `<tr><td style="padding-left:2rem;color:#999">vs 你的實際報酬差距</td><td style="text-align:right" class="${diffClass}"><small>${diffSign}${formatMoney(Math.abs(diff), "TWD")}</small></td></tr>`;
             }
         }
 
