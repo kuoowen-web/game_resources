@@ -197,6 +197,9 @@ document.addEventListener("keydown", (e) => {
         if (document.getElementById("view-cashflow").style.display !== "none") {
             renderCashflowList();
         }
+        if (document.getElementById("view-chart").style.display !== "none") {
+            renderChart();
+        }
     }
 });
 
