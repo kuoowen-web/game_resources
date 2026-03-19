@@ -14,6 +14,7 @@
             <button id="nav-overview" class="nav-btn active">總覽</button>
             <button id="nav-compare" class="nav-btn">比較</button>
             <button id="nav-chart" class="nav-btn">趨勢</button>
+            <button id="nav-cashflow" class="nav-btn">現金流</button>
         </nav>
     </header>
     <main>
@@ -51,6 +52,15 @@
             </div>
             <div id="compare-content"></div>
             <div id="compare-grand-total"></div>
+        </section>
+
+        <!-- Cashflow View -->
+        <section id="view-cashflow" style="display:none">
+            <div class="toolbar">
+                <h2 style="margin:0">現金流事件</h2>
+                <button id="btn-add-cashflow">+ 新增事件</button>
+            </div>
+            <div id="cashflow-list"></div>
         </section>
 
         <!-- Chart View -->

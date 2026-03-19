@@ -64,7 +64,7 @@ const API = {
 };
 
 // === Navigation ===
-const views = ["overview", "compare", "chart"];
+const views = ["overview", "compare", "chart", "cashflow"];
 
 function switchView(name) {
     views.forEach(v => {
@@ -79,6 +79,10 @@ document.getElementById("nav-compare").onclick = () => {
     buildStrategyUI();
 };
 document.getElementById("nav-chart").onclick = () => switchView("chart");
+document.getElementById("nav-cashflow").onclick = () => {
+    switchView("cashflow");
+    renderCashflowList();
+};
 
 document.querySelectorAll(".compare-cur-btn").forEach(btn => {
     btn.onclick = function() {
@@ -188,6 +192,10 @@ document.addEventListener("keydown", (e) => {
         if (document.getElementById("view-compare").style.display !== "none") {
             buildStrategyUI();
             if (lastCompareA && lastCompareB) compareSnapshots(lastCompareA, lastCompareB);
+        }
+        document.getElementById("nav-cashflow").textContent = disguised ? "Events" : "現金流";
+        if (document.getElementById("view-cashflow").style.display !== "none") {
+            renderCashflowList();
         }
     }
 });
@@ -1330,6 +1338,113 @@ document.getElementById("btn-compare").onclick = async () => {
     const [a, b] = await Promise.all([API.get(dateA), API.get(dateB)]);
     compareSnapshots(a, b);
 };
+
+// === Cashflow Management ===
+async function renderCashflowList() {
+    const container = document.getElementById("cashflow-list");
+    container.innerHTML = "";
+    if (disguised) {
+        container.textContent = "Locked";
+        document.getElementById("btn-add-cashflow").style.display = "none";
+        return;
+    }
+    document.getElementById("btn-add-cashflow").style.display = "";
+
+    let flows = [];
+    try { flows = await API.listCashflows(); } catch(e) {}
+
+    if (flows.length === 0) {
+        container.innerHTML = "<p style='color:#999'>尚無現金流事件。點「+ 新增事件」來記錄收入或支出。</p>";
+        return;
+    }
+
+    const table = document.createElement("table");
+    table.className = "asset-table";
+    table.innerHTML = `<thead><tr><th>日期</th><th>金額</th><th>備註</th><th></th></tr></thead>`;
+    const tbody = document.createElement("tbody");
+
+    for (const cf of flows) {
+        const tr = document.createElement("tr");
+        const amtClass = cf.amount >= 0 ? "delta-positive" : "delta-negative";
+        const sign = cf.amount >= 0 ? "+" : "";
+        tr.innerHTML = `
+            <td>${cf.date}</td>
+            <td class="${amtClass}">${sign}${formatMoney(Math.abs(cf.amount), "TWD")}</td>
+            <td>${cf.note || ""}</td>
+            <td>
+                <button class="btn-edit-cf" data-id="${cf.id}">編輯</button>
+                <button class="btn-remove-row" data-id="${cf.id}">✕</button>
+            </td>`;
+        tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    container.appendChild(table);
+
+    container.querySelectorAll(".btn-remove-row").forEach(btn => {
+        btn.onclick = async () => {
+            if (!confirm("確定刪除？")) return;
+            await API.deleteCashflow(parseInt(btn.dataset.id));
+            renderCashflowList();
+        };
+    });
+
+    container.querySelectorAll(".btn-edit-cf").forEach(btn => {
+        btn.onclick = () => {
+            const cf = flows.find(f => f.id === parseInt(btn.dataset.id));
+            if (cf) showCashflowModal(cf);
+        };
+    });
+}
+
+function showCashflowModal(existing) {
+    const isEdit = !!existing;
+    const date = existing?.date || new Date().toISOString().slice(0, 10);
+    const amount = existing?.amount ?? "";
+    const note = existing?.note || "";
+
+    const modal = document.createElement("div");
+    modal.className = "modal";
+    modal.style.display = "flex";
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width:400px">
+            <div class="modal-header">
+                <h2>${isEdit ? "編輯" : "新增"}現金流事件</h2>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div style="padding:1rem">
+                <div class="form-group"><label>日期</label><input id="cf-date" type="date" value="${date}"></div>
+                <div class="form-group"><label>金額（正=流入，負=流出）</label><input id="cf-amount" type="number" value="${amount}"></div>
+                <div class="form-group"><label>備註</label><input id="cf-note" type="text" value="${note}" placeholder="年度收入、繳稅..."></div>
+            </div>
+            <div class="modal-footer">
+                <button id="cf-save">${isEdit ? "更新" : "新增"}</button>
+                <button id="cf-cancel">取消</button>
+            </div>
+        </div>`;
+
+    document.body.appendChild(modal);
+
+    const close = () => modal.remove();
+    modal.querySelector(".modal-close-btn").onclick = close;
+    modal.querySelector("#cf-cancel").onclick = close;
+    modal.querySelector("#cf-save").onclick = async () => {
+        const d = document.getElementById("cf-date").value;
+        const a = parseFloat(document.getElementById("cf-amount").value);
+        const n = document.getElementById("cf-note").value;
+        if (!d || isNaN(a)) { alert("請填入日期和金額"); return; }
+        try {
+            if (isEdit) {
+                await API.updateCashflow(existing.id, {date: d, amount: a, note: n});
+            } else {
+                await API.createCashflow({date: d, amount: a, note: n});
+            }
+            close();
+            renderCashflowList();
+        } catch (e) { alert("儲存失敗: " + e.message); }
+    };
+}
+
+document.getElementById("btn-add-cashflow").onclick = () => showCashflowModal(null);
 
 // === Time Series Chart ===
 let trendChart = null;

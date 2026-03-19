@@ -93,3 +93,4 @@ main { max-width: 1200px; margin: 1rem auto; padding: 0 1rem; }
 .mix-alloc-row select, .mix-alloc-row input { padding: 0.2rem 0.4rem; border: 1px solid #ddd; border-radius: 3px; }
 .mix-summary { font-size: 0.8rem; margin-top: 0.3rem; }
 .cashflow-details { padding: 0.5rem 0; font-size: 0.85rem; color: #666; line-height: 1.6; }
+.btn-edit-cf { font-size: 0.75rem; padding: 0.1rem 0.4rem; border: 1px solid #ccc; border-radius: 3px; background: white; cursor: pointer; margin-right: 0.3rem; }
