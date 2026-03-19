@@ -12,6 +12,18 @@ def create_app(data_dir=None):
     snapshots_dir = os.path.join(data_dir, "snapshots")
     os.makedirs(snapshots_dir, exist_ok=True)
 
+    cashflows_file = os.path.join(data_dir, "cashflows.json")
+
+    def _load_cashflows():
+        if not os.path.exists(cashflows_file):
+            return []
+        with open(cashflows_file, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def _save_cashflows(data):
+        with open(cashflows_file, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+
     web_dir = str(Path(__file__).parent.parent / "web")
 
     def is_valid_date(date_str):
@@ -80,6 +92,46 @@ def create_app(data_dir=None):
         if not os.path.exists(filepath):
             return jsonify({"error": "Snapshot not found"}), 404
         os.remove(filepath)
+        return jsonify({"ok": True})
+
+    @app.route("/api/cashflows", methods=["GET"])
+    def list_cashflows():
+        return jsonify(_load_cashflows())
+
+    @app.route("/api/cashflows", methods=["POST"])
+    def create_cashflow():
+        data = request.get_json()
+        if not data or "date" not in data or "amount" not in data:
+            return jsonify({"error": "Missing date or amount"}), 400
+        flows = _load_cashflows()
+        entry = {"id": len(flows), "date": data["date"], "amount": data["amount"], "note": data.get("note", "")}
+        flows.append(entry)
+        _save_cashflows(flows)
+        return jsonify(entry), 201
+
+    @app.route("/api/cashflows/<int:idx>", methods=["PUT"])
+    def update_cashflow(idx):
+        flows = _load_cashflows()
+        if idx < 0 or idx >= len(flows):
+            return jsonify({"error": "Not found"}), 404
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing body"}), 400
+        flows[idx] = {"id": idx, "date": data.get("date", flows[idx]["date"]),
+                       "amount": data.get("amount", flows[idx]["amount"]),
+                       "note": data.get("note", flows[idx].get("note", ""))}
+        _save_cashflows(flows)
+        return jsonify(flows[idx])
+
+    @app.route("/api/cashflows/<int:idx>", methods=["DELETE"])
+    def delete_cashflow(idx):
+        flows = _load_cashflows()
+        if idx < 0 or idx >= len(flows):
+            return jsonify({"error": "Not found"}), 404
+        flows.pop(idx)
+        for i, f in enumerate(flows):
+            f["id"] = i
+        _save_cashflows(flows)
         return jsonify({"ok": True})
 
     return app
