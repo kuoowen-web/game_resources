@@ -1264,53 +1264,63 @@ async function renderCompareGrandTotal(container, totalA, totalB, snapA, snapB, 
 
     const sign = md.investmentGain >= 0 ? "+" : "";
     const annPct = days > 0 ? (md.annualized * 100).toFixed(1) + "%" : "—";
+    const totalChange = totalB - totalA;
+    const totalChangeSign = totalChange >= 0 ? "+" : "";
+    const totalChangeClass = totalChange >= 0 ? "delta-positive" : "delta-negative";
+    const daysLabel = Math.round(days);
 
-    let strategyHeaders = "";
-    let strategyCells = "";
-    if (!disguised && strategyResults.length > 0) {
-        for (const sr of strategyResults) {
-            strategyHeaders += `<th>${sr.name}</th>`;
-            const sSign = sr.gain >= 0 ? "+" : "";
-            const sEndMd = calcModifiedDietz(totalA, sr.endVal, periodCashflows, snapA.date, snapB.date);
-            const sAnnPct = days > 0 ? (sEndMd.annualized * 100).toFixed(1) + "%" : "—";
-            const sDeltaClass = sr.gain >= 0 ? "delta-positive" : "delta-negative";
-            strategyCells += `<td class="${sDeltaClass}">${formatMoney(sr.endVal, "TWD")}<br><small>${sSign}${formatMoney(Math.abs(sr.gain), "TWD")} (${sAnnPct})</small></td>`;
+    if (disguised) {
+        // Simplified disguised view
+        div.innerHTML = `
+            <table class="asset-table grand-total-table">
+                <thead><tr><th></th><th>Value</th></tr></thead>
+                <tbody>
+                    <tr><td>Start</td><td>${formatMoney(totalA, "TWD")}</td></tr>
+                    <tr><td>End</td><td>${formatMoney(totalB, "TWD")}</td></tr>
+                    <tr class="subtotal-row"><td>Grand Total Change</td>
+                        <td class="${totalChangeClass}">${totalChangeSign}${formatMoney(Math.abs(totalChange), "TWD")}</td></tr>
+                </tbody>
+            </table>`;
+    } else {
+        // Detailed breakdown view
+        let html = `<h3>績效總結（TWD 換算）</h3>`;
+        html += `<table class="asset-table grand-total-table"><tbody>`;
+        html += `<tr><td>期初資產 (${snapA.date})</td><td style="text-align:right">${formatMoney(totalA, "TWD")}</td></tr>`;
+        html += `<tr><td>期末資產 (${snapB.date})</td><td style="text-align:right">${formatMoney(totalB, "TWD")}</td></tr>`;
+        html += `<tr class="subtotal-row"><td>資產總變化</td><td style="text-align:right" class="${totalChangeClass}">${totalChangeSign}${formatMoney(Math.abs(totalChange), "TWD")}</td></tr>`;
+
+        if (periodCashflows.length > 0) {
+            html += `<tr><td colspan="2" style="padding-top:1rem"><strong>扣除外部現金流</strong></td></tr>`;
+            for (const cf of periodCashflows) {
+                const cfSign = cf.amount >= 0 ? "+" : "";
+                const cfClass = cf.amount >= 0 ? "delta-positive" : "delta-negative";
+                html += `<tr><td style="padding-left:1rem">${cf.date}　${cf.note || ""}</td><td style="text-align:right" class="${cfClass}">${cfSign}${formatMoney(Math.abs(cf.amount), "TWD")}</td></tr>`;
+            }
+            html += `<tr style="border-top:1px solid #ddd"><td style="padding-left:1rem">淨流入小計</td><td style="text-align:right">${formatMoney(md.netFlow, "TWD")}</td></tr>`;
         }
-    }
 
-    const hdrA = disguised ? "Season " + snapA.date : snapA.date;
-    const hdrB = disguised ? "Season " + snapB.date : snapB.date;
-    const netFlowLabel = disguised ? "Net Flow" : "淨流入";
-    const gainLabel = disguised ? "Return" : "投資報酬";
-    const annLabel = disguised ? "Ann." : "年化";
+        html += `<tr class="subtotal-row"><td>實際投資報酬（扣除現金流）</td><td style="text-align:right" class="${deltaClass}"><strong>${sign}${formatMoney(Math.abs(md.investmentGain), "TWD")}</strong></td></tr>`;
+        html += `<tr><td>報酬率（${daysLabel} 天）</td><td style="text-align:right" class="${deltaClass}">${(md.return * 100).toFixed(2)}%</td></tr>`;
+        html += `<tr><td>年化報酬率</td><td style="text-align:right" class="${deltaClass}">${annPct}</td></tr>`;
 
-    div.innerHTML = `
-        <table class="asset-table grand-total-table">
-            <thead><tr>
-                <th></th><th>${hdrA}</th><th>${hdrB}</th>
-                <th>${netFlowLabel}</th><th>${gainLabel}</th><th>${annLabel}</th>
-                ${strategyHeaders}
-            </tr></thead>
-            <tbody><tr class="subtotal-row">
-                <td>${totalLabel}</td>
-                <td>${formatMoney(totalA, "TWD")}</td>
-                <td>${formatMoney(totalB, "TWD")}</td>
-                <td>${formatMoney(md.netFlow, "TWD")}</td>
-                <td class="${deltaClass}">${sign}${formatMoney(Math.abs(md.investmentGain), "TWD")}</td>
-                <td class="${deltaClass}">${annPct}</td>
-                ${strategyCells}
-            </tr></tbody>
-        </table>`;
+        // Strategy comparison
+        if (strategyResults.length > 0) {
+            html += `<tr><td colspan="2" style="padding-top:1rem"><strong>假設策略比較</strong>　<small style="color:#999">（同樣的本金和現金流，如果全部用以下策略）</small></td></tr>`;
+            for (const sr of strategyResults) {
+                const sSign = sr.gain >= 0 ? "+" : "";
+                const sEndMd = calcModifiedDietz(totalA, sr.endVal, periodCashflows, snapA.date, snapB.date);
+                const sAnnPct = days > 0 ? (sEndMd.annualized * 100).toFixed(1) + "%" : "—";
+                const sDeltaClass = sr.gain >= 0 ? "delta-positive" : "delta-negative";
+                const diff = md.investmentGain - sr.gain;
+                const diffSign = diff >= 0 ? "+" : "";
+                const diffClass = diff >= 0 ? "delta-positive" : "delta-negative";
+                html += `<tr><td style="padding-left:1rem">${sr.name}</td><td style="text-align:right" class="${sDeltaClass}">${sSign}${formatMoney(Math.abs(sr.gain), "TWD")}（年化 ${sAnnPct}）</td></tr>`;
+                html += `<tr><td style="padding-left:2rem;color:#999">vs 你的實際報酬</td><td style="text-align:right" class="${diffClass}"><small>${diffSign}${formatMoney(Math.abs(diff), "TWD")}</small></td></tr>`;
+            }
+        }
 
-    if (periodCashflows.length > 0 && !disguised) {
-        const cfList = periodCashflows.map(cf => {
-            const s = cf.amount >= 0 ? "+" : "";
-            return `${cf.date}: ${s}${formatMoney(Math.abs(cf.amount), "TWD")}${cf.note ? " (" + cf.note + ")" : ""}`;
-        }).join("<br>");
-        const cfDiv = document.createElement("div");
-        cfDiv.className = "cashflow-details";
-        cfDiv.innerHTML = `<small>期間現金流事件：<br>${cfList}</small>`;
-        div.appendChild(cfDiv);
+        html += `</tbody></table>`;
+        div.innerHTML = html;
     }
 
     if (missingRates && missingRates.size > 0) {

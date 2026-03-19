@@ -75,8 +75,10 @@ main { max-width: 1200px; margin: 1rem auto; padding: 0 1rem; }
 .subtotal-row td { padding-top: 0.6rem; }
 
 .compare-grand-total { background: white; border-radius: 8px; padding: 1rem; margin-top: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.grand-total-table .subtotal-row { font-size: 1.1rem; border-top: none; }
-.grand-total-table .subtotal-row td small { font-size: 0.8rem; font-weight: normal; }
+.compare-grand-total h3 { color: #2c3e50; margin-bottom: 0.5rem; }
+.grand-total-table { max-width: 600px; }
+.grand-total-table td { padding: 0.4rem 0.5rem; }
+.grand-total-table .subtotal-row { font-size: 1.05rem; }
 
 .strategy-error { color: #e74c3c; padding: 0.5rem 0; font-size: 0.9rem; }
 .strategy-warning { color: #e67e22; padding: 0.5rem 0; font-size: 0.85rem; }
