@@ -1273,7 +1273,14 @@ async function renderCompareGrandTotal(container, totalA, totalB, totalB_atRates
                 strategyResults = strategies.map(s => {
                     const endVal = calcStrategyWithCashflows(totalA, periodCashflows, s, snapA.date, snapB.date);
                     const sGain = endVal - totalA - md.netFlow;
-                    return {name: s.name, endVal, gain: sGain};
+                    // Stated rate for display context
+                    let statedRate = null;
+                    if (s.type === "deposit") statedRate = s.rate.toFixed(1) + "%/年";
+                    else if (s.type === "index") {
+                        const idxReturn = ((s.endPrice / s.startPrice - 1) * 100).toFixed(1);
+                        statedRate = `${idxReturn}%（${s.startPrice}→${s.endPrice}）`;
+                    }
+                    return {name: s.name, endVal, gain: sGain, statedRate};
                 });
             }
         }
@@ -1349,11 +1356,21 @@ async function renderCompareGrandTotal(container, totalA, totalB, totalB_atRates
             html += `<tr><td colspan="2" style="padding-top:1rem"><strong>假設策略比較</strong>　<small style="color:#999">（同樣的本金和現金流，如果全部用以下策略）</small></td></tr>`;
             for (const sr of strategyResults) {
                 const sSign = sr.gain >= 0 ? "+" : "";
+                const sEndMd = calcModifiedDietz(totalA, sr.endVal, periodCashflows, snapA.date, snapB.date);
+                const sAnnPct = days > 0 ? (sEndMd.annualized * 100).toFixed(1) + "%" : "—";
                 const sDeltaClass = sr.gain >= 0 ? "delta-positive" : "delta-negative";
                 const diff = md.investmentGain - sr.gain;
                 const diffSign = diff >= 0 ? "+" : "";
                 const diffClass = diff >= 0 ? "delta-positive" : "delta-negative";
-                html += `<tr><td style="padding-left:1rem">${sr.name}</td><td style="text-align:right" class="${sDeltaClass}">${sSign}${formatMoney(Math.abs(sr.gain), "TWD")}（${daysLabel} 天）</td></tr>`;
+
+                // Stated rate for context
+                let statedNote = "";
+                if (sr.statedRate != null) statedNote = `　<small style="color:#999">策略設定 ${sr.statedRate}</small>`;
+
+                html += `<tr><td style="padding-left:1rem">${sr.name}${statedNote}</td><td style="text-align:right" class="${sDeltaClass}">${sSign}${formatMoney(Math.abs(sr.gain), "TWD")}（年化 ${sAnnPct}）</td></tr>`;
+                if (sAnnPct !== sr.statedRate && sr.statedRate) {
+                    html += `<tr><td style="padding-left:2rem;color:#999">↳ 年化與設定利率的差異來自現金流時間點加權</td><td></td></tr>`;
+                }
                 html += `<tr><td style="padding-left:2rem;color:#999">vs 你的實際報酬差距</td><td style="text-align:right" class="${diffClass}"><small>${diffSign}${formatMoney(Math.abs(diff), "TWD")}</small></td></tr>`;
             }
         }
