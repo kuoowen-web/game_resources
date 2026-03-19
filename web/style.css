@@ -27,6 +27,9 @@ main { max-width: 1200px; margin: 1rem auto; padding: 0 1rem; }
 .total-row.grand { font-weight: bold; font-size: 1.3rem; border-top: 2px solid #2c3e50; margin-top: 0.5rem; padding-top: 0.5rem; }
 
 .compare-category { background: white; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.compare-cat-header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+.compare-cat-header h3 { margin: 0; }
+.toggle-icon { color: #999; font-size: 0.8rem; }
 .delta-positive { color: #27ae60; }
 .delta-negative { color: #e74c3c; }
 .delta-new { color: #2980b9; font-style: italic; }
@@ -76,6 +79,7 @@ main { max-width: 1200px; margin: 1rem auto; padding: 0 1rem; }
 
 .compare-grand-total { background: white; border-radius: 8px; padding: 1rem; margin-top: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .compare-grand-total h3 { color: #2c3e50; margin-bottom: 0.5rem; }
+.rate-note { font-size: 0.8rem; color: #888; margin-bottom: 0.5rem; }
 .grand-total-table { max-width: 600px; }
 .grand-total-table td { padding: 0.4rem 0.5rem; }
 .grand-total-table .subtotal-row { font-size: 1.05rem; }

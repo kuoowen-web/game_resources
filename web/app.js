@@ -1133,7 +1133,10 @@ async function compareSnapshots(a, b) {
 
         const div = document.createElement("div");
         div.className = "compare-category";
-        div.innerHTML = `<h3>${disguiseLabel(cat)}</h3>`;
+
+        const header = document.createElement("div");
+        header.className = "compare-cat-header";
+        header.innerHTML = `<h3>${disguiseLabel(cat)}</h3><span class="toggle-icon">▼</span>`;
 
         const table = document.createElement("table");
         table.className = "asset-table";
@@ -1211,8 +1214,24 @@ async function compareSnapshots(a, b) {
         }
 
         table.appendChild(tbody);
+        div.appendChild(header);
         div.appendChild(table);
         container.appendChild(div);
+
+        // Toggle: clicking header collapses detail rows, keeps subtotals visible
+        const detailRows = tbody.querySelectorAll("tr:not(.subtotal-row)");
+        const thead = table.querySelector("thead");
+        header.style.cursor = "pointer";
+        header.onclick = () => {
+            const collapsed = thead.style.display === "none";
+            thead.style.display = collapsed ? "" : "none";
+            detailRows.forEach(r => r.style.display = collapsed ? "" : "none");
+            header.querySelector(".toggle-icon").textContent = collapsed ? "▼" : "▶";
+        };
+        // Start collapsed
+        thead.style.display = "none";
+        detailRows.forEach(r => r.style.display = "none");
+        header.querySelector(".toggle-icon").textContent = "▶";
     }
 
     // Grand total block
@@ -1283,7 +1302,14 @@ async function renderCompareGrandTotal(container, totalA, totalB, snapA, snapB, 
             </table>`;
     } else {
         // Detailed breakdown view
+        const rateNote = Object.keys(snapA.exchange_rates || {}).map(k => {
+            const rA = snapA.exchange_rates[k];
+            const rB = (snapB.exchange_rates || {})[k];
+            const label = k.replace("_TWD", "/TWD");
+            return rB && rA !== rB ? `${label}: ${rA}→${rB}` : `${label}: ${rA}`;
+        }).join("、");
         let html = `<h3>績效總結（TWD 換算）</h3>`;
+        if (rateNote) html += `<p class="rate-note">匯率：期初各用各的匯率換算　<small>${rateNote}</small></p>`;
         html += `<table class="asset-table grand-total-table"><tbody>`;
         html += `<tr><td>期初資產 (${snapA.date})</td><td style="text-align:right">${formatMoney(totalA, "TWD")}</td></tr>`;
         html += `<tr><td>期末資產 (${snapB.date})</td><td style="text-align:right">${formatMoney(totalB, "TWD")}</td></tr>`;
