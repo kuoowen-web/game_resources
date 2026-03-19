@@ -28,7 +28,9 @@ python app.py
 
 1. 複製 `player_stats.example.md` 為 `player_stats.md`，填入自己的財務資料
 2. 複製 `insights.example.md` 為 `insights.md`，記錄研究結論
-3. 執行 `pip install -r requirements.txt` 安裝依賴（首次使用）
+3. 安裝依賴（首次使用）：
+   - 只跑 app：`pip install -r requirements.txt`（只需 Flask）
+   - 開發/測試：`pip install -r requirements-dev.txt`（Flask + pytest）
 
 這兩個檔案已加入 `.gitignore`，不會被 commit。
 
