@@ -6,7 +6,7 @@
 
 本地 webapp，用來記錄和分析個人資產快照。
 
-**功能：** 資產總覽、多幣別切換（原幣/TWD/USD）、即時市值計算機、Snapshot 比較、趨勢圖表、inline 編輯
+**功能：** 資產總覽、多幣別切換（原幣/TWD/USD）、即時市值計算機、Snapshot 比較（含類別小計、匯率影響拆解）、假設策略比較（定存/指數/混合，Modified Dietz 績效歸因）、現金流事件管理、趨勢圖表、inline 編輯
 
 **隱私保護：** 預設以遊戲用語顯示（金幣/鑽石/護盾...），隱藏真實資產名稱與編輯功能。在總覽頁面鍵盤輸入密碼即可切換。
 
@@ -35,6 +35,8 @@ python app.py
 ## 隱私規則
 
 - `player_stats.md` 和 `insights.md` 包含個人財務資料，不可 commit
+- `discussion-points.md` 包含討論中的財務決策，不可 commit
+- `data/cashflows.json` 包含現金流事件（收入、繳稅等），不可 commit
 - `insights.md` 中不得包含可識別個人的財務數字，只記錄通用的研究結論
 
 ## 所需 Skills
@@ -54,3 +56,4 @@ python app.py
 | daily-recap | 回顧工作進度 |
 | cleanup-docs | 清除暫存檔 |
 | skill-from-masters | 探討理財方法論 |
+| update-docs | 掃描並更新專案文件 |
