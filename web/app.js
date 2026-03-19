@@ -33,6 +33,33 @@ const API = {
         const resp = await fetch(`/api/snapshots/${date}`, {method: "DELETE"});
         if (!resp.ok) throw new Error((await resp.json()).error || "Delete failed");
         return resp.json();
+    },
+    async listCashflows() {
+        const resp = await fetch("/api/cashflows");
+        return resp.json();
+    },
+    async createCashflow(cf) {
+        const resp = await fetch("/api/cashflows", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(cf)
+        });
+        if (!resp.ok) throw new Error((await resp.json()).error || "Create failed");
+        return resp.json();
+    },
+    async updateCashflow(id, cf) {
+        const resp = await fetch(`/api/cashflows/${id}`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(cf)
+        });
+        if (!resp.ok) throw new Error((await resp.json()).error || "Update failed");
+        return resp.json();
+    },
+    async deleteCashflow(id) {
+        const resp = await fetch(`/api/cashflows/${id}`, {method: "DELETE"});
+        if (!resp.ok) throw new Error((await resp.json()).error || "Delete failed");
+        return resp.json();
     }
 };
 
@@ -1022,8 +1049,50 @@ function checkMissingRates(snapshot) {
     return missing;
 }
 
+function calcModifiedDietz(vStart, vEnd, cashflows, startDate, endDate) {
+    const totalDays = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24);
+    if (totalDays <= 0) return {return: 0, annualized: 0, netFlow: 0, investmentGain: 0};
+
+    let netFlow = 0;
+    let weightedFlow = 0;
+    for (const cf of cashflows) {
+        const cfDate = new Date(cf.date);
+        const daysSinceStart = (cfDate - new Date(startDate)) / (1000 * 60 * 60 * 24);
+        const weight = (totalDays - daysSinceStart) / totalDays;
+        netFlow += cf.amount;
+        weightedFlow += cf.amount * weight;
+    }
+
+    const investmentGain = vEnd - vStart - netFlow;
+    const denominator = vStart + weightedFlow;
+    const mdReturn = denominator !== 0 ? investmentGain / denominator : 0;
+    const annualized = Math.pow(1 + mdReturn, 365 / totalDays) - 1;
+
+    return {return: mdReturn, annualized, netFlow, investmentGain};
+}
+
+function calcStrategyWithCashflows(vStart, cashflows, strategy, startDate, endDate) {
+    const totalDays = (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24);
+    if (totalDays <= 0) return vStart;
+
+    // Start with principal growing from start to end
+    let result = calculateStrategy(vStart, strategy, totalDays);
+
+    // Each cash flow grows from its date to end date
+    for (const cf of cashflows) {
+        const cfDate = new Date(cf.date);
+        const remainingDays = (new Date(endDate) - cfDate) / (1000 * 60 * 60 * 24);
+        if (remainingDays > 0 && cf.amount > 0) {
+            result += calculateStrategy(cf.amount, strategy, remainingDays);
+        } else if (cf.amount < 0) {
+            result += cf.amount;
+        }
+    }
+    return result;
+}
+
 // === Comparison ===
-function compareSnapshots(a, b) {
+async function compareSnapshots(a, b) {
     lastCompareA = a;
     lastCompareB = b;
 
@@ -1140,75 +1209,101 @@ function compareSnapshots(a, b) {
 
     // Grand total block
     const allMissing = new Set([...missingRatesA, ...missingRatesB]);
-    renderCompareGrandTotal(grandTotalContainer, grandTotalA_TWD, grandTotalB_TWD, a, b, allMissing);
+    await renderCompareGrandTotal(grandTotalContainer, grandTotalA_TWD, grandTotalB_TWD, a, b, allMissing);
 }
 
-function renderCompareGrandTotal(container, totalA, totalB, snapA, snapB, missingRates) {
+async function renderCompareGrandTotal(container, totalA, totalB, snapA, snapB, missingRates) {
     const strategies = collectStrategies();
     const days = (new Date(snapB.date) - new Date(snapA.date)) / (1000 * 60 * 60 * 24);
 
-    const delta = totalB - totalA;
-    const pct = totalA !== 0 ? ((delta / totalA) * 100).toFixed(1) + "%" : "—";
-    const sign = delta >= 0 ? "+" : "";
-    const deltaClass = delta >= 0 ? "delta-positive" : "delta-negative";
-    const totalLabel = disguised ? "Grand Total" : "總計 (TWD)";
+    // Fetch cashflows for this period
+    let allCashflows = [];
+    try {
+        allCashflows = await API.listCashflows();
+    } catch (e) { /* no cashflows file yet */ }
+    const periodCashflows = allCashflows.filter(cf => cf.date > snapA.date && cf.date <= snapB.date);
 
-    // Check if strategies can be calculated
+    // Modified Dietz actual return
+    const md = calcModifiedDietz(totalA, totalB, periodCashflows, snapA.date, snapB.date);
+
+    const totalLabel = disguised ? "Grand Total" : "總計 (TWD)";
+    const deltaClass = md.investmentGain >= 0 ? "delta-positive" : "delta-negative";
+
+    // Strategy calculations
     let strategyError = null;
     let strategyResults = [];
 
     if (strategies.length > 0) {
         if (days <= 0) {
-            strategyError = disguised ? "Snapshot A must be before Snapshot B for strategy calculation" : "Snapshot A 必須早於 Snapshot B 才能計算假設策略";
+            strategyError = disguised ? "Snapshot A must be before Snapshot B" : "Snapshot A 必須早於 Snapshot B 才能計算假設策略";
         } else {
-            // Check for missing exchange rates
             const missingRatesList = checkMissingRates(snapA);
             if (missingRatesList.length > 0) {
                 strategyError = (disguised ? "Missing exchange rate: " : "缺少匯率: ") + missingRatesList.join(", ");
             } else {
-                strategyResults = strategies.map(s => ({
-                    name: s.name,
-                    value: calculateStrategy(totalA, s, days)
-                }));
+                strategyResults = strategies.map(s => {
+                    const endVal = calcStrategyWithCashflows(totalA, periodCashflows, s, snapA.date, snapB.date);
+                    const sGain = endVal - totalA - md.netFlow;
+                    return {name: s.name, endVal, gain: sGain};
+                });
             }
         }
     }
 
-    // Build table
+    // Build display
     const div = document.createElement("div");
     div.className = "compare-grand-total";
 
+    const sign = md.investmentGain >= 0 ? "+" : "";
+    const annPct = days > 0 ? (md.annualized * 100).toFixed(1) + "%" : "—";
+
     let strategyHeaders = "";
     let strategyCells = "";
-
     if (!disguised && strategyResults.length > 0) {
         for (const sr of strategyResults) {
             strategyHeaders += `<th>${sr.name}</th>`;
-            const sDelta = sr.value - totalA;
-            const sPct = totalA !== 0 ? ((sDelta / totalA) * 100).toFixed(1) : "0";
-            const sSign = sDelta >= 0 ? "+" : "";
-            const sDeltaClass = sDelta >= 0 ? "delta-positive" : "delta-negative";
-            strategyCells += `<td class="${sDeltaClass}">${formatMoney(sr.value, "TWD")}<br><small>${sSign}${formatMoney(Math.abs(sDelta), "TWD")} (${sSign}${sPct}%)</small></td>`;
+            const sSign = sr.gain >= 0 ? "+" : "";
+            const sEndMd = calcModifiedDietz(totalA, sr.endVal, periodCashflows, snapA.date, snapB.date);
+            const sAnnPct = days > 0 ? (sEndMd.annualized * 100).toFixed(1) + "%" : "—";
+            const sDeltaClass = sr.gain >= 0 ? "delta-positive" : "delta-negative";
+            strategyCells += `<td class="${sDeltaClass}">${formatMoney(sr.endVal, "TWD")}<br><small>${sSign}${formatMoney(Math.abs(sr.gain), "TWD")} (${sAnnPct})</small></td>`;
         }
     }
+
+    const hdrA = disguised ? "Season " + snapA.date : snapA.date;
+    const hdrB = disguised ? "Season " + snapB.date : snapB.date;
+    const netFlowLabel = disguised ? "Net Flow" : "淨流入";
+    const gainLabel = disguised ? "Return" : "投資報酬";
+    const annLabel = disguised ? "Ann." : "年化";
 
     div.innerHTML = `
         <table class="asset-table grand-total-table">
             <thead><tr>
-                <th></th><th>${disguised ? "Season " + snapA.date : snapA.date}</th>
-                <th>${disguised ? "Season " + snapB.date : snapB.date}</th>
-                <th>${disguised ? "Delta" : "變化"}</th><th>%</th>
+                <th></th><th>${hdrA}</th><th>${hdrB}</th>
+                <th>${netFlowLabel}</th><th>${gainLabel}</th><th>${annLabel}</th>
                 ${strategyHeaders}
             </tr></thead>
             <tbody><tr class="subtotal-row">
                 <td>${totalLabel}</td>
                 <td>${formatMoney(totalA, "TWD")}</td>
                 <td>${formatMoney(totalB, "TWD")}</td>
-                <td class="${deltaClass}">${sign}${formatMoney(Math.abs(delta), "TWD")}</td>
-                <td class="${deltaClass}">${pct}</td>
+                <td>${formatMoney(md.netFlow, "TWD")}</td>
+                <td class="${deltaClass}">${sign}${formatMoney(Math.abs(md.investmentGain), "TWD")}</td>
+                <td class="${deltaClass}">${annPct}</td>
                 ${strategyCells}
             </tr></tbody>
         </table>`;
+
+    if (periodCashflows.length > 0 && !disguised) {
+        const cfList = periodCashflows.map(cf => {
+            const s = cf.amount >= 0 ? "+" : "";
+            return `${cf.date}: ${s}${formatMoney(Math.abs(cf.amount), "TWD")}${cf.note ? " (" + cf.note + ")" : ""}`;
+        }).join("<br>");
+        const cfDiv = document.createElement("div");
+        cfDiv.className = "cashflow-details";
+        cfDiv.innerHTML = `<small>期間現金流事件：<br>${cfList}</small>`;
+        div.appendChild(cfDiv);
+    }
 
     if (missingRates && missingRates.size > 0) {
         const warnDiv = document.createElement("div");
