@@ -9,13 +9,14 @@
 
 - `player_stats.md` 和 `insights.md` 包含個人財務資料，不可 commit
 - `discussion-points.md` 包含討論中的財務決策，不可 commit
+- `data/cashflows.json` 包含現金流事件（收入、繳稅等），不可 commit
 - 寫入 `insights.md` 時不得包含可識別個人的財務數字，只記錄通用的研究結論
 
 ## 專案工具
 
 - **Game Resource Tracker**：資產快照 webapp，啟動方式：`start.bat` 或 `cd server && python app.py`（port 5000）
   - 設計文件：`docs/2026-03-17-asset-tracker-design.md`
-  - 資料：`data/snapshots/YYYY-MM-DD.json`
+  - 資料：`data/snapshots/YYYY-MM-DD.json`、`data/cashflows.json`（現金流事件）
   - 偽裝模式：預設顯示遊戲用語，在總覽區鍵盤輸入密碼解鎖真實資料
   - 每個資產類別有 inline 編輯按鈕（解鎖後可見）
 

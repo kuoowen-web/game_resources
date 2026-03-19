@@ -166,9 +166,82 @@ The compare view currently doesn't have currency toggle buttons (unlike overview
 | `web/index.html` | Strategy input section HTML, currency toggle buttons for compare view |
 | `web/style.css` | Styling for subtotal rows, total block, strategy inputs, strategy result columns |
 
+## Phase 2: Cash Flow-Aware Performance Attribution
+
+### Motivation
+
+The Phase 1 comparison uses Snapshot A's total assets as principal, ignoring that new money flows in between snapshots (e.g., annual income) and flows out (e.g., tax payments). This makes the comparison unfair — actual asset growth includes new money, not just investment returns.
+
+### Cash Flow Events File
+
+A separate JSON file records significant cash flow events: `data/cashflows.json` (gitignored — contains private financial data).
+
+```json
+[
+  {"date": "2026-08-15", "amount": 9000000, "note": "年度收入進帳"},
+  {"date": "2026-05-20", "amount": -3200000, "note": "繳所得稅"},
+  {"date": "2027-08-15", "amount": 9000000, "note": "年度收入進帳"}
+]
+```
+
+- `amount`: positive = inflow, negative = outflow
+- `note`: description (display only)
+- Small daily expenses are ignored — only record significant events (income, tax, large purchases)
+- Managed via a simple CRUD UI in the app, or by editing the JSON directly
+
+### API Addition
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/cashflows` | List all cash flow events |
+| POST | `/api/cashflows` | Add a cash flow event |
+| PUT | `/api/cashflows/<index>` | Update a cash flow event |
+| DELETE | `/api/cashflows/<index>` | Delete a cash flow event |
+
+### Modified Dietz Calculation
+
+When comparing Snapshot A → B, the app:
+
+1. Filters `cashflows.json` for events between A.date and B.date
+2. Calculates the **actual return** using Modified Dietz:
+
+```
+actual_return = (V_end - V_start - CF_total) / (V_start + Σ(CF_i × W_i))
+
+Where:
+  V_start = Snapshot A TWD total
+  V_end = Snapshot B TWD total
+  CF_total = sum of all cash flows in period
+  CF_i = individual cash flow amount
+  W_i = (total_days - days_since_flow) / total_days
+```
+
+3. Calculates **strategy benchmark return** using the same cash flows:
+   - Fixed deposit: each cash flow earns interest from its date to end date
+   - Index: each cash flow buys at the price on that date (user inputs intermediate prices or uses linear interpolation)
+
+### Grand Total Display (Updated)
+
+```
+|              | Snapshot A  | Snapshot B  | 淨流入    | 實際報酬  | 年化    | 2% 定存  | S&P 500  |
+|--------------|------------|------------|----------|---------|--------|---------|---------|
+| **總計 (TWD)**| 12,000,000 | 21,500,000 | 9,000,000| +500,000 | +4.2% | +440,000 (+3.7%) | +620,000 (+5.2%) |
+```
+
+- 「淨流入」= sum of cash flows in period
+- 「實際報酬」= V_end - V_start - 淨流入 (pure investment return)
+- 「年化」= Modified Dietz annualized
+- Strategy columns: what those cash flows would have earned under the strategy
+
+### Disguise Mode
+
+- Cash flow management UI: hidden when disguised
+- Cash flow amounts in grand total: shown (numbers are already displayed, consistent with existing behavior)
+
 ## Non-Goals
 
-- No backend changes needed (all calculation is client-side)
-- No persistence of strategies
+- No backend changes needed for Phase 1 (all calculation is client-side)
+- No persistence of strategies (session-only)
 - No per-category hypothetical (only grand total)
 - No forward projections
+- Phase 2 cashflow CRUD requires minimal backend addition
