@@ -16,9 +16,13 @@
 
 - **Game Resource Tracker**：資產快照 webapp，啟動方式：`start.bat` 或 `cd server && python app.py`（port 5000）
   - 設計文件：`docs/2026-03-17-asset-tracker-design.md`
+  - 假設比較 spec：`docs/superpowers/specs/2026-03-18-hypothetical-comparison-design.md`
   - 資料：`data/snapshots/YYYY-MM-DD.json`、`data/cashflows.json`（現金流事件）
   - 偽裝模式：預設顯示遊戲用語，在總覽區鍵盤輸入密碼解鎖真實資料
   - 每個資產類別有 inline 編輯按鈕（解鎖後可見）
+  - 比較功能：類別小計、TWD 總計、幣別切換、匯率影響拆解
+  - 假設策略比較：定存/指數追蹤/混合，用 Modified Dietz 扣除現金流後公平比較
+  - 現金流管理：記錄大額進出（收入、繳稅），比較時自動帶入計算
 
 ## 工作流程
 
