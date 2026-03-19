@@ -1,0 +1,68 @@
+{
+  "date": "2026-01-01",
+  "note": "範例資料 — 年初盤點",
+  "exchange_rates": {
+    "USD_TWD": 32.5,
+    "JPY_TWD": 0.21,
+    "EUR_TWD": 36.0
+  },
+  "assets": {
+    "deposits": [
+      {"name": "北富銀台幣", "currency": "TWD", "amount": 1900000},
+      {"name": "北富銀美金", "currency": "USD", "amount": 190000},
+      {"name": "郵局台幣", "currency": "TWD", "amount": 5300000},
+      {"name": "元大新台幣", "currency": "TWD", "amount": 8200000},
+      {"name": "元大日圓", "currency": "JPY", "amount": 172431},
+      {"name": "元大美元", "currency": "USD", "amount": 5500},
+      {"name": "彰銀台幣", "currency": "TWD", "amount": 8200000},
+      {"name": "星展台幣", "currency": "TWD", "amount": 1400000},
+      {"name": "星展美金", "currency": "USD", "amount": 8200},
+      {"name": "上海商銀台幣", "currency": "TWD", "amount": 310000},
+      {"name": "華南台幣", "currency": "TWD", "amount": 3100000},
+      {"name": "國泰世華台幣", "currency": "TWD", "amount": 3100000},
+      {"name": "國泰世華日圓", "currency": "JPY", "amount": 2480}
+    ],
+    "insurance": [
+      {
+        "name": "PFA富邦美富紅運外幣分紅終身壽險",
+        "type": "savings",
+        "currency": "USD",
+        "surrender_value": 95000,
+        "annual_premium": 84378,
+        "paid_years": 1,
+        "total_years": 6
+      },
+      {
+        "name": "SWY富邦醫卡放心重大傷病保險",
+        "type": "health",
+        "currency": "TWD",
+        "surrender_value": 115000,
+        "annual_premium": 87120,
+        "paid_years": 2,
+        "total_years": 20
+      }
+    ],
+    "bonds": [],
+    "structured_products": [
+      {
+        "name": "十年利率區間計息利率型107",
+        "currency": "USD",
+        "principal": 70000,
+        "account_value": 64500,
+        "linked_to": "美國SOFR ICE Swap Rate",
+        "maturity_date": "2036-02"
+      }
+    ],
+    "tw_stocks": [
+      {"name": "2330 台積電", "currency": "TWD", "shares": 600, "avg_cost": 1870},
+      {"name": "2610 華航", "currency": "TWD", "shares": 2000, "avg_cost": 18.60}
+    ],
+    "us_stocks": [],
+    "crypto": [
+      {"name": "BTC", "currency": "USD", "amount": 0.035, "avg_cost": 72661, "current_price": 93000},
+      {"name": "USDT", "currency": "USD", "amount": 983.42, "avg_cost": 1, "current_price": 1},
+      {"name": "ETH", "currency": "USD", "amount": 0.026, "avg_cost": 4271, "current_price": 3400},
+      {"name": "CAKE", "currency": "USD", "amount": 6.62, "avg_cost": 23.17, "current_price": 2.85}
+    ]
+  }
+}
