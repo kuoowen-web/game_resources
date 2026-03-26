@@ -41,7 +41,7 @@ def create_app(data_dir=None):
     def list_snapshots():
         result = []
         for f in sorted(os.listdir(snapshots_dir)):
-            if f.endswith(".json"):
+            if f.endswith(".json") and is_valid_date(f[:-5]):
                 filepath = os.path.join(snapshots_dir, f)
                 with open(filepath, "r", encoding="utf-8") as fh:
                     data = json.load(fh)
